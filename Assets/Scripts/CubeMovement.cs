@@ -4,8 +4,8 @@ public class CubeMovement : MonoBehaviour
 {
     // Public variables appear in the Inspector for easy tuning
     [Header("Movement Parameters")]
-    public float speed = 2.0f;           // Controls how fast the angle (and thus movement) changes
-    public float radius = 7.0f;          // The radius of the circle
+    public float speed = 0.2f;           // Controls how fast the angle (and thus movement) changes
+    public float radius = 15.0f;          // The radius of the circle
     public Vector3 centerPoint;          // The center point of the circle
 
     private float currentAngle;          // The current angle in radians

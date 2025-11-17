@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Threading;
+using Unity.VisualScripting;
 using UnityEngine;
 
 public class droneMovementController2 : MonoBehaviour
@@ -18,9 +19,11 @@ public class droneMovementController2 : MonoBehaviour
 
 
     private float maxVelocity = 10.0f;
-
+    private float upSpeed = 10.0f;
+    private float rightSpeed = 10.0f;
     void Start()
     {
+        
         rb = GetComponent<Rigidbody>();
     }
 
@@ -30,9 +33,33 @@ public class droneMovementController2 : MonoBehaviour
 
         if (LogVelocities(timer, logInterval)) { timer = 0; }
 
-        MoveBy("metaController");
+        // MoveBy("metaController");
 
-        ClampVelocities();        
+        Vector2 rightThumbstick = OVRInput.Get(OVRInput.Axis2D.SecondaryThumbstick);
+        Vector2 leftThumbstick = OVRInput.Get(OVRInput.Axis2D.PrimaryThumbstick);
+        Debug.Log($"right thumb x is: {rightThumbstick.x}");
+        Debug.Log($"right thumb y is: {rightThumbstick.y}");
+
+        if (Mathf.Abs(leftThumbstick.x) > stopThreshold) rb.AddForce(transform.right * leftThumbstick.x * rightSpeed);
+        else
+        {
+            float dragFactor = 5f;
+            rb.AddForce(-rb.linearVelocity.x * dragFactor, 0, 0);
+        }
+
+        if (Mathf.Abs(rightThumbstick.y) > stopThreshold) rb.AddForce(transform.up * rightThumbstick.y * upSpeed);
+        else
+        {
+            float dragFactor = 5f;
+            rb.AddForce(0, -rb.linearVelocity.y * dragFactor, 0);
+        }
+
+        
+
+        Vector3 currentVelocity = rb.linearVelocity;
+        currentVelocity.z = 10.0f;
+        rb.linearVelocity = currentVelocity;
+        //ClampVelocities();        
     }
 
 
@@ -88,7 +115,17 @@ public class droneMovementController2 : MonoBehaviour
         Vector2 leftThumbstick  = OVRInput.Get(OVRInput.Axis2D.PrimaryThumbstick);
         Debug.Log($"left thumb x is: {leftThumbstick.x}");
         Debug.Log($"right thumb y is: {rightThumbstick.y}");
-        
+
+
+        if (Mathf.Abs(rightThumbstick.x) > stopThreshold) { forceDirection += rightThumbstick.x * (Vector3.right);   }
+        else
+        {
+            //if (Mathf.Abs(rb.linearVelocity.x) > stopThreshold) {rb.linearVelocity }
+        }
+        if (Mathf.Abs(rightThumbstick.y) > stopThreshold) { forceDirection += rightThumbstick.y * (Vector3.forward); }
+        if (Mathf.Abs(leftThumbstick.y ) > stopThreshold) { forceDirection += leftThumbstick.y  * (Vector3.up);      }
+
+
         
         // right/ left
         if (Mathf.Abs(leftThumbstick.x) > stopThreshold) { forceDirection += leftThumbstick.x * (Vector3.right); }
@@ -158,7 +195,9 @@ public class droneMovementController2 : MonoBehaviour
         if (forceDirection != Vector3.zero) { rb.AddForce(forceDirection.normalized * forceMagnitude, ForceMode.Force); }
     }
 
-    
+    /// <summary>
+    /// Prevent from over speeding
+    /// </summary>
     private void ClampVelocities()
     {
         Vector3 rbVelocity = rb.linearVelocity;
