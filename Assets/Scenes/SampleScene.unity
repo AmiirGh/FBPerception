@@ -2866,6 +2866,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1510882336}
   - component: {fileID: 1510882335}
+  - component: {fileID: 1510882337}
   m_Layer: 0
   m_Name: SpawnManager
   m_TagString: Untagged
@@ -2886,7 +2887,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   staticObstacle: {fileID: 8259461159688264459, guid: 9ae8372af5525124c81380d21b62fcbf, type: 3}
-  UVAPos: {fileID: 307974537}
+  UVATransform: {fileID: 307974537}
 --- !u!4 &1510882336
 Transform:
   m_ObjectHideFlags: 0
@@ -2902,6 +2903,20 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1510882337
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1510882334}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1485c0e456c906a4fbd42778c6784abc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  dynamicObstacle: {fileID: 8259461159688264459, guid: 4df66ed506b9c6340af22df6c420e371, type: 3}
+  UVATransform: {fileID: 307974537}
 --- !u!1 &1554380657
 GameObject:
   m_ObjectHideFlags: 0

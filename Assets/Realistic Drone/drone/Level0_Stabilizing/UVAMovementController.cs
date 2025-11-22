@@ -19,8 +19,8 @@ public class UVAMovementController : MonoBehaviour
 
 
     private float maxVelocity = 10.0f;
-    private float upSpeed = 10.0f;
-    private float rightSpeed = 10.0f;
+    private float upSpeed = 15.0f;
+    private float rightSpeed = 15.0f;
     private float forwardSpeed = 15.0f;
     void Start()
     {
