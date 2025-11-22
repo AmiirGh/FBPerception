@@ -7,10 +7,12 @@ public class DynamicObstacleSpawner : MonoBehaviour
     private GameObject dynamicObstacle;
     [SerializeField]
     private Transform UVATransform;
+
+    public int degree = 0;
     private GameObject currentDynamicObstacle;
-    private Vector3 dynamicObstaclePos = new Vector3(0, 0, 0);
+    public Vector3 dynamicObstaclePos = new Vector3(0, 0, 0);
     private float timer = 0;
-    private int degree = 0;
+    
     private float distanceRadius = 10.0f;
     private float appearanceDuration = 5.0f;
     void Start()
@@ -18,8 +20,9 @@ public class DynamicObstacleSpawner : MonoBehaviour
         
     }
 
-    void Update()
+    void LateUpdate()
     {
+        if (currentDynamicObstacle != null) Debug.Log($"distance between obstacle and uva: {UVATransform.position - currentDynamicObstacle.transform.position}");
         timer += Time.deltaTime;
         if (timer >= 3)
         {
@@ -35,6 +38,7 @@ public class DynamicObstacleSpawner : MonoBehaviour
             MoveDynamicObstacle();
         }
     }
+
     void MoveDynamicObstacle()
     {
         StartCoroutine(KeepConstantDistance());
@@ -45,7 +49,7 @@ public class DynamicObstacleSpawner : MonoBehaviour
         while (elapsedTime < appearanceDuration)
         {
             elapsedTime += Time.deltaTime;
-            currentDynamicObstacle.transform.position = UVATransform.position + dynamicObstaclePos;
+            currentDynamicObstacle.transform.position = UVATransform.position + new Vector3(dynamicObstaclePos.x, 0, dynamicObstaclePos.z); 
             yield return null;
         }
     }

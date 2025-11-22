@@ -7,7 +7,7 @@ public class StaticObstacleSpawner : MonoBehaviour
     [SerializeField]
     private Transform UVATransform;
     private float timer = 0.0f;
-    private Vector3 staticObstaclePos = new Vector3(0, 0, 0);
+    public Vector3 staticObstaclePos = new Vector3(0, 0, 0);
     private int cnt = 0;
 
     private float xRange = 4.0f;
