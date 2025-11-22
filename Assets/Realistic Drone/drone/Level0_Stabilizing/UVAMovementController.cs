@@ -4,7 +4,7 @@ using System.Threading;
 using Unity.VisualScripting;
 using UnityEngine;
 
-public class droneMovementController2 : MonoBehaviour
+public class UVAMovementController : MonoBehaviour
 {
 
     private Rigidbody rb;
@@ -21,6 +21,7 @@ public class droneMovementController2 : MonoBehaviour
     private float maxVelocity = 10.0f;
     private float upSpeed = 10.0f;
     private float rightSpeed = 10.0f;
+    private float forwardSpeed = 15.0f;
     void Start()
     {
         
@@ -57,7 +58,7 @@ public class droneMovementController2 : MonoBehaviour
         
 
         Vector3 currentVelocity = rb.linearVelocity;
-        currentVelocity.z = 10.0f;
+        currentVelocity.z = forwardSpeed;
         rb.linearVelocity = currentVelocity;
         //ClampVelocities();        
     }
