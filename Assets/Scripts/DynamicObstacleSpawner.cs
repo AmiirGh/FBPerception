@@ -20,7 +20,7 @@ public class DynamicObstacleSpawner : MonoBehaviour
         
     }
 
-    void LateUpdate()
+    void Update()
     {
         if (currentDynamicObstacle != null) Debug.Log($"distance between obstacle and uva: {UVATransform.position - currentDynamicObstacle.transform.position}");
         timer += Time.deltaTime;
@@ -35,10 +35,17 @@ public class DynamicObstacleSpawner : MonoBehaviour
                                              UVATransform.position.y,
                                              distanceRadius * Mathf.Sin(degree * Mathf.PI / 180.0f));
             currentDynamicObstacle = Instantiate(dynamicObstacle, UVATransform.position, Quaternion.identity);
-            MoveDynamicObstacle();
+            //MoveDynamicObstacle();
         }
     }
-
+    void LateUpdate()
+    {
+        // This runs every frame, AFTER the box (uva) has moved.
+        if (currentDynamicObstacle != null)
+        {
+            currentDynamicObstacle.transform.position = UVATransform.position + new Vector3(dynamicObstaclePos.x, 0, dynamicObstaclePos.z);
+        }
+    }
     void MoveDynamicObstacle()
     {
         StartCoroutine(KeepConstantDistance());

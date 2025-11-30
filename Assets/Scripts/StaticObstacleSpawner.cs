@@ -12,7 +12,7 @@ public class StaticObstacleSpawner : MonoBehaviour
 
     private float xRange = 4.0f;
     private float yRange = 4.0f;
-    private float generationRate = 1f;
+    private float generationRate = 5f;
     void Start()
     {
         

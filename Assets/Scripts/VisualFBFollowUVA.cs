@@ -5,6 +5,7 @@ public class VisualFBFollowUVA : MonoBehaviour
     [SerializeField]
     private Transform UVATransform;
     private Vector3 positionOffset = new Vector3(0, 0, 7.1f);
+    
     void Start()
     {
         

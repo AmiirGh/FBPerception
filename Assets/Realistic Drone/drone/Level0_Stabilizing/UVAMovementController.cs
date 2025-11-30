@@ -28,7 +28,7 @@ public class UVAMovementController : MonoBehaviour
         rb = GetComponent<Rigidbody>();
     }
 
-    void FixedUpdate()
+    void Update()
     {
         timer += Time.deltaTime;
 
