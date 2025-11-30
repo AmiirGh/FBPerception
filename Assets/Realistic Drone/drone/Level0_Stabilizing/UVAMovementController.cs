@@ -22,6 +22,9 @@ public class UVAMovementController : MonoBehaviour
     private float upSpeed = 15.0f;
     private float rightSpeed = 15.0f;
     private float forwardSpeed = 15.0f;
+    private float xRange = 6.0f;
+    private float yRange = 6.0f;
+    private float dragFactor = 5.0f;
     void Start()
     {
         
@@ -32,40 +35,45 @@ public class UVAMovementController : MonoBehaviour
     {
         timer += Time.deltaTime;
 
-        if (LogVelocities(timer, logInterval)) { timer = 0; }
+        //if (LogVelocities(timer, logInterval)) { timer = 0; }
 
-        // MoveBy("metaController");
+        //MoveBy("metaController");
+        MoveBy("keyboard");
 
-        Vector2 rightThumbstick = OVRInput.Get(OVRInput.Axis2D.SecondaryThumbstick);
-        Vector2 leftThumbstick = OVRInput.Get(OVRInput.Axis2D.PrimaryThumbstick);
-        Debug.Log($"right thumb x is: {rightThumbstick.x}");
-        Debug.Log($"right thumb y is: {rightThumbstick.y}");
-
-        if (Mathf.Abs(leftThumbstick.x) > stopThreshold) rb.AddForce(transform.right * leftThumbstick.x * rightSpeed);
-        else
-        {
-            float dragFactor = 5f;
-            rb.AddForce(-rb.linearVelocity.x * dragFactor, 0, 0);
-        }
-
-        if (Mathf.Abs(rightThumbstick.y) > stopThreshold) rb.AddForce(transform.up * rightThumbstick.y * upSpeed);
-        else
-        {
-            float dragFactor = 5f;
-            rb.AddForce(0, -rb.linearVelocity.y * dragFactor, 0);
-        }
-
-        
-
-        Vector3 currentVelocity = rb.linearVelocity;
-        currentVelocity.z = forwardSpeed;
-        rb.linearVelocity = currentVelocity;
+        ClampPosition();
         //ClampVelocities();        
     }
 
 
 
+    void ClampPosition()
+    {
+        Vector3 pos = rb.position;
 
+        if (pos.x > xRange)
+        {
+            pos.x = xRange;
+            rb.linearVelocity = new Vector3(0, rb.linearVelocity.y, rb.linearVelocity.z);
+        }
+        else if (pos.x < -xRange)
+        {
+            pos.x = -xRange;
+            rb.linearVelocity = new Vector3(0, rb.linearVelocity.y, rb.linearVelocity.z);
+        }
+
+        if (pos.y > yRange)
+        {
+            pos.y = yRange;
+            rb.linearVelocity = new Vector3(rb.linearVelocity.x, 0, rb.linearVelocity.z);
+        }
+        else if (pos.y < -yRange)
+        {
+            pos.y = -yRange;
+            rb.linearVelocity = new Vector3(rb.linearVelocity.x, 0, rb.linearVelocity.z);
+        }
+
+        rb.position = pos;
+    }
 
 
     /// <summary>
@@ -110,53 +118,25 @@ public class UVAMovementController : MonoBehaviour
     /// </summary>
     private void MoveByMetaController()
     {
-        Vector3 forceDirection = Vector3.zero;
-
         Vector2 rightThumbstick = OVRInput.Get(OVRInput.Axis2D.SecondaryThumbstick);
-        Vector2 leftThumbstick  = OVRInput.Get(OVRInput.Axis2D.PrimaryThumbstick);
-        Debug.Log($"left thumb x is: {leftThumbstick.x}");
+        Vector2 leftThumbstick = OVRInput.Get(OVRInput.Axis2D.PrimaryThumbstick);
+        Debug.Log($"right thumb x is: {rightThumbstick.x}");
         Debug.Log($"right thumb y is: {rightThumbstick.y}");
 
-
-        if (Mathf.Abs(rightThumbstick.x) > stopThreshold) { forceDirection += rightThumbstick.x * (Vector3.right);   }
+        if (Mathf.Abs(leftThumbstick.x) > stopThreshold) rb.AddForce(transform.right * leftThumbstick.x * rightSpeed);
         else
         {
-            //if (Mathf.Abs(rb.linearVelocity.x) > stopThreshold) {rb.linearVelocity }
+            rb.AddForce(-rb.linearVelocity.x * dragFactor, 0, 0);
         }
-        if (Mathf.Abs(rightThumbstick.y) > stopThreshold) { forceDirection += rightThumbstick.y * (Vector3.forward); }
-        if (Mathf.Abs(leftThumbstick.y ) > stopThreshold) { forceDirection += leftThumbstick.y  * (Vector3.up);      }
 
-
-        
-        // right/ left
-        if (Mathf.Abs(leftThumbstick.x) > stopThreshold) { forceDirection += leftThumbstick.x * (Vector3.right); }
+        if (Mathf.Abs(rightThumbstick.y) > stopThreshold) rb.AddForce(transform.up * rightThumbstick.y * upSpeed);
         else
         {
-            if (Mathf.Abs(rb.linearVelocity.x) > stopThreshold) { rb.linearVelocity = new Vector3(rb.linearVelocity.x * dampingFactor, rb.linearVelocity.y, rb.linearVelocity.z); }
-            else { rb.linearVelocity = new Vector3(0, rb.linearVelocity.y, rb.linearVelocity.z); }
+            rb.AddForce(0, -rb.linearVelocity.y * dragFactor, 0);
         }
-
-        // forward/backward
-        if (Mathf.Abs(leftThumbstick.y) > stopThreshold) { forceDirection += leftThumbstick.y * (Vector3.forward); }
-        else
-        {
-            if (Mathf.Abs(rb.linearVelocity.z) > stopThreshold) { rb.linearVelocity = new Vector3(rb.linearVelocity.x, rb.linearVelocity.y, rb.linearVelocity.z * dampingFactor); }
-            else { rb.linearVelocity = new Vector3(rb.linearVelocity.x, rb.linearVelocity.y, 0); }
-        }
-
-        // forward/backward
-        if (Mathf.Abs(rightThumbstick.y) > stopThreshold) { forceDirection += rightThumbstick.y * (Vector3.up); }
-        else
-        {
-            if (Mathf.Abs(rb.linearVelocity.y) > stopThreshold) { rb.linearVelocity = new Vector3(rb.linearVelocity.x, rb.linearVelocity.y * dampingFactor, rb.linearVelocity.z); }
-            else { rb.linearVelocity = new Vector3(rb.linearVelocity.x, 0, rb.linearVelocity.z); }
-        }
-
-
-
-
-        Debug.Log($"Force direction: {forceDirection}");
-        if (forceDirection != Vector3.zero) { rb.AddForce(forceDirection.normalized * forceMagnitude, ForceMode.Force); }
+        Vector3 currentVelocity = rb.linearVelocity;
+        currentVelocity.z = forwardSpeed;
+        rb.linearVelocity = currentVelocity;
     }
 
     /// <summary>
@@ -164,36 +144,31 @@ public class UVAMovementController : MonoBehaviour
     /// </summary>
     private void MoveByKeyboard()
     {
-        Vector3 forceDirection = Vector3.zero;
 
-        // up/down
-        if (Input.GetKey(KeyCode.E)) { forceDirection += Vector3.up; }
-        else if (Input.GetKey(KeyCode.Q)) { forceDirection += Vector3.down; }
+        float horizontalInput = Input.GetAxis("Horizontal");
+        float verticalInput   = Input.GetAxis("Vertical");
+
+        if (Mathf.Abs(verticalInput) > stopThreshold)
+        {
+            rb.AddForce(transform.up * verticalInput * upSpeed);
+        }
         else
         {
-            if (Mathf.Abs(rb.linearVelocity.y) > stopThreshold) { rb.linearVelocity = new Vector3(rb.linearVelocity.x, rb.linearVelocity.y * dampingFactor, rb.linearVelocity.z); }
-            else { rb.linearVelocity = new Vector3(rb.linearVelocity.x, 0, rb.linearVelocity.z); }
+            rb.AddForce(0, -rb.linearVelocity.y * dragFactor, 0);
         }
 
-        // right/left
-        if (Input.GetKey(KeyCode.A)) { forceDirection += Vector3.left; }
-        else if (Input.GetKey(KeyCode.D)) { forceDirection += Vector3.right; }
+        if (Mathf.Abs(horizontalInput) > stopThreshold)
+        {
+            rb.AddForce(transform.right * horizontalInput * rightSpeed);
+        }
         else
         {
-            if (Mathf.Abs(rb.linearVelocity.x) > stopThreshold) { rb.linearVelocity = new Vector3(rb.linearVelocity.x * dampingFactor, rb.linearVelocity.y, rb.linearVelocity.z); }
-            else { rb.linearVelocity = new Vector3(0, rb.linearVelocity.y, rb.linearVelocity.z); }
+            rb.AddForce(-rb.linearVelocity.x * dragFactor, 0, 0);
         }
 
-        // forward/backward
-        if (Input.GetKey(KeyCode.W)) { forceDirection += Vector3.forward; }
-        else if (Input.GetKey(KeyCode.S)) { forceDirection += Vector3.back; }
-        else
-        {
-            if (Mathf.Abs(rb.linearVelocity.z) > stopThreshold) { rb.linearVelocity = new Vector3(rb.linearVelocity.x, rb.linearVelocity.y, rb.linearVelocity.z * dampingFactor); }
-            else { rb.linearVelocity = new Vector3(rb.linearVelocity.x, rb.linearVelocity.y, 0); }
-        }
-
-        if (forceDirection != Vector3.zero) { rb.AddForce(forceDirection.normalized * forceMagnitude, ForceMode.Force); }
+        Vector3 currentVelocity = rb.linearVelocity;
+        currentVelocity.z = forwardSpeed;
+        rb.linearVelocity = currentVelocity;
     }
 
     /// <summary>

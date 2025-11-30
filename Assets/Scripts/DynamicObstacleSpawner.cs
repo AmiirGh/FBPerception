@@ -35,7 +35,6 @@ public class DynamicObstacleSpawner : MonoBehaviour
                                              UVATransform.position.y,
                                              distanceRadius * Mathf.Sin(degree * Mathf.PI / 180.0f));
             currentDynamicObstacle = Instantiate(dynamicObstacle, UVATransform.position, Quaternion.identity);
-            //MoveDynamicObstacle();
         }
     }
     void LateUpdate()
@@ -46,18 +45,5 @@ public class DynamicObstacleSpawner : MonoBehaviour
             currentDynamicObstacle.transform.position = UVATransform.position + new Vector3(dynamicObstaclePos.x, 0, dynamicObstaclePos.z);
         }
     }
-    void MoveDynamicObstacle()
-    {
-        StartCoroutine(KeepConstantDistance());
-    }
-    IEnumerator KeepConstantDistance()
-    {
-        float elapsedTime = 0f;
-        while (elapsedTime < appearanceDuration)
-        {
-            elapsedTime += Time.deltaTime;
-            currentDynamicObstacle.transform.position = UVATransform.position + new Vector3(dynamicObstaclePos.x, 0, dynamicObstaclePos.z); 
-            yield return null;
-        }
-    }
+
 }
