@@ -22,8 +22,8 @@ public class UVAMovementController : MonoBehaviour
     private float upSpeed = 15.0f;
     private float rightSpeed = 15.0f;
     private float forwardSpeed = 15.0f;
-    private float xRange = 6.0f;
-    private float yRange = 6.0f;
+    public float xRange = 6.0f;
+    public float yRange = 6.0f;
     private float dragFactor = 5.0f;
     void Start()
     {
@@ -35,13 +35,10 @@ public class UVAMovementController : MonoBehaviour
     {
         timer += Time.deltaTime;
 
-        //if (LogVelocities(timer, logInterval)) { timer = 0; }
-
         //MoveBy("metaController");
         MoveBy("keyboard");
 
-        ClampPosition();
-        //ClampVelocities();        
+        ClampPosition();  
     }
 
 

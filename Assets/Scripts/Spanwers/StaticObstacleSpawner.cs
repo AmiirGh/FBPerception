@@ -6,17 +6,20 @@ public class StaticObstacleSpawner : MonoBehaviour
     private GameObject staticObstacle;
     [SerializeField]
     private Transform UVATransform;
+    [SerializeField]
+    private UVAMovementController uVAMovementController;
     private float timer = 0.0f;
     public Vector3 staticObstaclePos = new Vector3(0, 0, 0);
     private int cnt = 0;
 
-    private float xRange = 4.0f;
-    private float yRange = 4.0f;
-    private float generationRate = 5f;
+    private float xRange = 0.0f;
+    private float yRange = 0.0f;
+    private float generationRate = 10f;
     private GameObject obstacleInstantiated;
     void Start()
     {
-        
+        xRange = 1.1f *  uVAMovementController.xRange;
+        yRange = 1.1f * uVAMovementController.yRange;
     }
 
     // Update is called once per frame
@@ -34,9 +37,12 @@ public class StaticObstacleSpawner : MonoBehaviour
     /// </summary>
     void GenerateStaticObstacle()
     {
-        staticObstaclePos = new Vector3(Random.Range(-xRange, xRange), Random.Range(-yRange, yRange), UVATransform.position.z + 20.0f);
-
+        staticObstaclePos = new Vector3(Random.Range(-xRange, xRange), Random.Range(-yRange, yRange), UVATransform.position.z + 15.0f);
+        if(staticObstaclePos.x < -6.0f & Mathf.Abs(staticObstaclePos.y) > 6.0f)
+        {
+            Debug.Log("x more than 6");
+        }
         obstacleInstantiated = Instantiate(staticObstacle, staticObstaclePos, Quaternion.identity);
-        Destroy(obstacleInstantiated, 5f);
+        Destroy(obstacleInstantiated, 3f);
     }
 }
