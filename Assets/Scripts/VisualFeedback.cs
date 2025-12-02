@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 public class VisualFeedback : MonoBehaviour
@@ -14,6 +15,7 @@ public class VisualFeedback : MonoBehaviour
 
     public Vector3 posOffset = new Vector3(0, -3f, 5.4f);
     public float multiplier = 0.5f;
+    private List<float> feedbackRadii = new List<float> { 1.06f, 1.53f, 2.0f};
 
     void Start()
     {
@@ -30,10 +32,15 @@ public class VisualFeedback : MonoBehaviour
                                                  multiplier * (dynaObsPos.z) + visFbPos.z);
 
         float degree = dynamicObstacleSpawner.degree;
-        float distanceRadius = 4.0f / 2; // This is the scale of the visual feedback Plane devided by 2
-        circle.transform.position = new Vector3(distanceRadius * Mathf.Cos(degree) + transform.position.x,
-                                             transform.position.y,
-                                             distanceRadius * Mathf.Sin(degree) + visFbPos.z);
+        int level =  dynamicObstacleSpawner.level;
+        float frd = feedbackRadii[level];
+        if (level == 0 || level == 1)
+        {
+            Debug.Log(" ");
+        }
+        circle.transform.position = new Vector3(frd * Mathf.Cos(degree) + visFbPos.x,
+                                                transform.position.y,
+                                                frd * Mathf.Sin(degree) + visFbPos.z);
 
 
         feedbackPlane.transform.position = visFbPos;
