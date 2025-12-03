@@ -16,8 +16,9 @@ public class TCP : MonoBehaviour
     private TcpListener server;
     private TcpClient client;
     private NetworkStream netStream;
-    public static int action = 0;
+    public static int tempFromPCtoHMD = 0;
 
+    [SerializeField] DynamicObstacleSpawner dynamicObstacleSpawner;
     public string receivedData = string.Empty;
     private float[] sentData;
     public UnityEngine.UI.Text display;
@@ -30,7 +31,7 @@ public class TCP : MonoBehaviour
 
     async void Start()
     {
-        HOST = "192.168.0.105";
+        HOST = "172.16.157.203";
         PORT = 12345;
         await StartServerAsync();
     }
@@ -104,11 +105,8 @@ public class TCP : MonoBehaviour
                             if (receivedJson != null)
                             {
 
-                                action = receivedJson.action;
-                                //lock (scoreLock)
-                                //{
-                                // ScoreManager.scoreCount += receivedJson.scoreIncrement;
-                                //}
+                                tempFromPCtoHMD = receivedJson.tempFromPCtoHMD;
+                                Debug.Log($"tempFromPCtoHMD: {tempFromPCtoHMD}");
                             }
                             Debug.Log($"Received JSON: {jsonData}");
                         }
@@ -136,6 +134,8 @@ public class TCP : MonoBehaviour
                 var dataToSend = new SentData
                 {
                     timestamp = (float)Math.Round((DateTime.Now - startTime).TotalSeconds, 5),
+                    degree = dynamicObstacleSpawner.degree,
+                    level = dynamicObstacleSpawner.level,
                 };
 
                 string jsonData = JsonConvert.SerializeObject(dataToSend);
@@ -177,10 +177,12 @@ public class TCP : MonoBehaviour
 public class SentData
 {
     public float timestamp;
+    public float degree;
+    public int level;
 }
 
 [Serializable]
 public class ReceivedData
 {
-    public int action;
+    public int tempFromPCtoHMD;
 }

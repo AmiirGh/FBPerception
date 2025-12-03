@@ -1525,7 +1525,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &1315860983
 Transform:
   m_ObjectHideFlags: 0
@@ -1553,6 +1553,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 629ea9ec0281d304a9ad54177b2ebd12, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  dynamicObstacleSpawner: {fileID: 1510882337}
   receivedData: 
   display: {fileID: 0}
 --- !u!4 &1349659472 stripped
