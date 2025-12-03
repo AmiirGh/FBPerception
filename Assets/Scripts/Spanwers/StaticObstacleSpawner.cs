@@ -14,7 +14,7 @@ public class StaticObstacleSpawner : MonoBehaviour
 
     private float xRange = 0.0f;
     private float yRange = 0.0f;
-    private float generationRate = 10f;
+    private float generationRate = 13f;
     private GameObject obstacleInstantiated;
     void Start()
     {
@@ -37,7 +37,7 @@ public class StaticObstacleSpawner : MonoBehaviour
     /// </summary>
     void GenerateStaticObstacle()
     {
-        staticObstaclePos = new Vector3(Random.Range(-xRange, xRange), Random.Range(-yRange, yRange), UVATransform.position.z + 15.0f);
+        staticObstaclePos = new Vector3(Random.Range(-xRange, xRange), Random.Range(-yRange, yRange), UVATransform.position.z + 25.0f);
         if(staticObstaclePos.x < -6.0f & Mathf.Abs(staticObstaclePos.y) > 6.0f)
         {
             Debug.Log("x more than 6");
