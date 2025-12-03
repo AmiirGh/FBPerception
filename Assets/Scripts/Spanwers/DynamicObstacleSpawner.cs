@@ -11,6 +11,7 @@ public class DynamicObstacleSpawner : MonoBehaviour
     private Transform UVATransform;
 
     public float degree = 0;
+    public int degreeInt = 0;
     public int level = 0;
     private GameObject currentDynamicObstacle;
     public Vector3 dynamicObstaclePos = new Vector3(0, 0, 0);
@@ -18,7 +19,7 @@ public class DynamicObstacleSpawner : MonoBehaviour
     
     private float distanceRadius = 10.0f;
     private List<float> distanceRadii = new List<float> { 12, 8, 4 };
-    private float appearanceDuration = 5.0f;
+    private float appearanceDuration = 10.0f;
     void Start()
     {
         
@@ -27,7 +28,7 @@ public class DynamicObstacleSpawner : MonoBehaviour
     void Update()
     {
         timer += Time.deltaTime;
-        if (timer >= 3)
+        if (timer >= appearanceDuration)
         {
             timer = 0;
             GenerateDynamicObstacle();
@@ -44,7 +45,7 @@ public class DynamicObstacleSpawner : MonoBehaviour
     {
         if (currentDynamicObstacle != null) Destroy(currentDynamicObstacle);
 
-        (degree, level) = GetDegreeLevel();
+        (degreeInt, degree, level) = GetDegreeLevel();
         dynamicObstaclePos = new Vector3(distanceRadii[level] * Mathf.Cos(degree),
                                          UVATransform.position.y,
                                          distanceRadius * Mathf.Sin(degree));
@@ -55,13 +56,14 @@ public class DynamicObstacleSpawner : MonoBehaviour
     /// returns random values for degree (pi/4, pi/2, 3pi/4, ...) and level (1, 2, 3)
     /// </summary>
     /// <returns></returns>
-    Tuple<float, int> GetDegreeLevel()
+    Tuple<int, float, int> GetDegreeLevel()
     {
-        float degreeInFunc = Mathf.PI / 4 * UnityEngine.Random.Range(0, 8); // in radians
+        int degreeInFuncInt = UnityEngine.Random.Range(0, 8);
+        float degreeInFunc = Mathf.PI / 4 * degreeInFuncInt; // in radians
         
         int levelInFunc = UnityEngine.Random.Range(0, 3);
         Debug.Log($"LevelFunc: {levelInFunc}");
-        return Tuple.Create(degreeInFunc, levelInFunc);
+        return Tuple.Create(degreeInFuncInt, degreeInFunc, levelInFunc);
     }
 
 }

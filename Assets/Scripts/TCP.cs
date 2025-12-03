@@ -31,7 +31,7 @@ public class TCP : MonoBehaviour
 
     async void Start()
     {
-        HOST = "172.16.157.203";
+        HOST = "192.168.0.105";
         PORT = 12345;
         await StartServerAsync();
     }
@@ -135,6 +135,7 @@ public class TCP : MonoBehaviour
                 {
                     timestamp = (float)Math.Round((DateTime.Now - startTime).TotalSeconds, 5),
                     degree = dynamicObstacleSpawner.degree,
+                    degreeInt = dynamicObstacleSpawner.degreeInt,
                     level = dynamicObstacleSpawner.level,
                 };
 
@@ -178,6 +179,7 @@ public class SentData
 {
     public float timestamp;
     public float degree;
+    public int degreeInt;
     public int level;
 }
 

@@ -4,7 +4,7 @@ import time
 import struct
 import threading
 import traceback
-
+from vibration import *
 
 def send_data_with_prefix(client_socket, data):
     """Send JSON data with a length prefix."""
@@ -36,10 +36,13 @@ def receive_data_with_prefix(client_socket):
 
 
 class SimpleClient:
-    def __init__(self, host='172.16.157.203', port=12345):
+    def __init__(self, host='192.168.0.105', port=12345):
         self.client_socket = None
         self.running = True
         self.connect_to_server(host, port)
+        self.vib = VibrationClient()
+        self.invalid_degree_int = 10
+        self.invalid_level = 10
         # Send initial dummy data
         send_data_with_prefix(self.client_socket, {'tempFromPCtoHMD': 1})
 
@@ -61,12 +64,15 @@ class SimpleClient:
             try:
                 data = receive_data_with_prefix(self.client_socket)
                 if data:
-                    print(f"Received data: {data}")
+                    degree = data.get('degree')
+                    degree_int = data.get('degreeInt')
+                    level = data.get('level')
+                    print(f"Degree_int {degree_int}, Level: {level}")
+                    self.vib.send_vibration_data(degree_int, level)
+
+                    # print(f"Received data: {data}")
             except Exception as e:
-                print("--------------------------")
-                print(f"Error receiving data: {e}")
                 print(traceback.format_exc())
-                print("---------------------------")
                 self.running = False
                 break
 
@@ -80,10 +86,7 @@ class SimpleClient:
                 print(f"Sent dummy data: {dummy_response}")
                 time.sleep(1)  # Send every second
             except Exception as e:
-                print("-------------------------")
-                print(f"Error sending data: {e}")
                 print(traceback.format_exc())
-                print("--------------------------")
                 self.running = False
                 break
 
