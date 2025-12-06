@@ -48,7 +48,7 @@ public class DynamicObstacleSpawner : MonoBehaviour
         (degreeInt, degree, level) = GetDegreeLevel();
         dynamicObstaclePos = new Vector3(distanceRadii[level] * Mathf.Cos(degree),
                                          UVATransform.position.y,
-                                         distanceRadius * Mathf.Sin(degree));
+                                         distanceRadii[level] * Mathf.Sin(degree));
         currentDynamicObstacle = Instantiate(dynamicObstacle, UVATransform.position, Quaternion.identity);
     }
 

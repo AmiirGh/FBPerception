@@ -1831,6 +1831,7 @@ MonoBehaviour:
   dynamicObstacle: {fileID: 8259461159688264459, guid: 4df66ed506b9c6340af22df6c420e371, type: 3}
   UVATransform: {fileID: 307974537}
   degree: 0
+  degreeInt: 0
   level: 0
   dynamicObstaclePos: {x: 0, y: 0, z: 0}
 --- !u!114 &1510882338
@@ -2305,6 +2306,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 2115527889}
+  - component: {fileID: 2115527890}
   m_Layer: 0
   m_Name: Audio
   m_TagString: Untagged
@@ -2327,6 +2329,19 @@ Transform:
   m_Children: []
   m_Father: {fileID: 1483712065}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &2115527890
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2115527888}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8369158894750b44a48d6c122122e12, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  dynamicObstacleSpawner: {fileID: 1510882337}
 --- !u!1 &2136599061
 GameObject:
   m_ObjectHideFlags: 0
