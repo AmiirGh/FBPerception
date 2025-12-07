@@ -5,7 +5,7 @@ public class AudioFeedback : MonoBehaviour
 {
     [SerializeField]
     private DynamicObstacleSpawner dynamicObstacleSpawner;
-    SerialPort serial = new SerialPort("COM6", 9600);
+    SerialPort serial = new SerialPort("COM7", 9600);
     void Start()
     {
         serial.Open();
@@ -17,12 +17,10 @@ public class AudioFeedback : MonoBehaviour
     {
         if (serial.IsOpen)
         {
-            // --- Reading ---
-            //string data = serial.ReadLine();
-            //int val = int.Parse(data);
-            //Debug.Log($"port received data: {val}");
             int level = dynamicObstacleSpawner.level;
-            serial.Write(level.ToString());
+            string test = level.ToString();
+            serial.Write(test);
+            Debug.Log($"sentLevel {test}");
 
         }
 

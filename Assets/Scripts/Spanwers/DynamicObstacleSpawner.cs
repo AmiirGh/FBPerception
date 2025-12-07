@@ -19,7 +19,7 @@ public class DynamicObstacleSpawner : MonoBehaviour
     
     private float distanceRadius = 10.0f;
     private List<float> distanceRadii = new List<float> { 12, 8, 4 };
-    private float appearanceDuration = 10.0f;
+    private float appearanceDuration = 2.0f;
     void Start()
     {
         
