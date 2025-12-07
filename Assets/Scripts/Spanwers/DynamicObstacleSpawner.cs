@@ -16,7 +16,7 @@ public class DynamicObstacleSpawner : MonoBehaviour
     private GameObject currentDynamicObstacle;
     public Vector3 dynamicObstaclePos = new Vector3(0, 0, 0);
     private float timer = 0;
-    
+    public int trialNumber = 0;
     private float distanceRadius = 10.0f;
     private List<float> distanceRadii = new List<float> { 12, 8, 4 };
     private float appearanceDuration = 2.0f;
@@ -31,6 +31,7 @@ public class DynamicObstacleSpawner : MonoBehaviour
         if (timer >= appearanceDuration)
         {
             timer = 0;
+            trialNumber++;
             GenerateDynamicObstacle();
         }
     }
