@@ -20,6 +20,7 @@ public class TCP : MonoBehaviour
 
     [SerializeField] DynamicObstacleSpawner dynamicObstacleSpawner;
     [SerializeField] InputHandler inputHandler;
+    [SerializeField] Feedbacks feedbacks;
 
     public string receivedData = string.Empty;
     private float[] sentData;
@@ -138,9 +139,11 @@ public class TCP : MonoBehaviour
                     timestamp = (float)Math.Round((DateTime.Now - startTime).TotalSeconds, 5),
                     intervalNumber = dynamicObstacleSpawner.intervalNumber,
                     trialNumber = dynamicObstacleSpawner.trialNumber,
+                    isDynamicObstaclePresent = dynamicObstacleSpawner.isDynamicObstaclePresent,
                     degree = dynamicObstacleSpawner.degree,
                     degreeInt = dynamicObstacleSpawner.degreeInt,
                     level = dynamicObstacleSpawner.level,
+                    extraFbModality = feedbacks.extraFbModality,
                     rightIndexButton = inputHandler.rightIndexButton,
                 };
 
@@ -185,10 +188,13 @@ public class SentData
     public float timestamp;
     public int intervalNumber;
     public int trialNumber;
+    public bool isDynamicObstaclePresent;
     public float degree;
     public int degreeInt;
     public int level;
+    public int extraFbModality;
     public float rightIndexButton;
+    
 }
 
 [Serializable]

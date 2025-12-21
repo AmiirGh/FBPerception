@@ -2091,7 +2091,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &1315860983
 Transform:
   m_ObjectHideFlags: 0
@@ -2121,6 +2121,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   dynamicObstacleSpawner: {fileID: 1510882337}
   inputHandler: {fileID: 171331457}
+  feedbacks: {fileID: 1483712066}
   receivedData: 
   display: {fileID: 0}
 --- !u!4 &1349659472 stripped
@@ -2199,6 +2200,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1483712065}
+  - component: {fileID: 1483712066}
   m_Layer: 0
   m_Name: Feedbacks
   m_TagString: Untagged
@@ -2224,6 +2226,20 @@ Transform:
   - {fileID: 1493726999}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1483712066
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1483712064}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a0487317a6077b345a3cbfcee8dc814f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  dynamicObstacleSpawner: {fileID: 1510882337}
+  extraFbModality: 0
 --- !u!1 &1493726998
 GameObject:
   m_ObjectHideFlags: 0
@@ -2403,6 +2419,8 @@ MonoBehaviour:
   level: 0
   dynamicObstaclePos: {x: 0, y: 0, z: 0}
   trialNumber: 0
+  intervalNumber: 0
+  isDynamicObstaclePresent: 0
 --- !u!114 &1510882338
 MonoBehaviour:
   m_ObjectHideFlags: 0

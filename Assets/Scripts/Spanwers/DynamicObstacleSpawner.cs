@@ -20,7 +20,8 @@ public class DynamicObstacleSpawner : MonoBehaviour
     public int intervalNumber = 0; // is ++ when a new interval (after intervalDuration time) is started
     private float distanceRadius = 10.0f;
     private List<float> distanceRadii = new List<float> { 12, 8, 4 };
-
+    public bool isDynamicObstaclePresent = false;
+    private float dynamicObstaclePresenceDuration = 2;
     private float intervalDuration = 10.0f;
 
     void Start()
@@ -58,6 +59,13 @@ public class DynamicObstacleSpawner : MonoBehaviour
         yield return new WaitForSeconds(spawnAfter);
         GenerateDynamicObstacle();
         trialNumber++;
+        isDynamicObstaclePresent = true;
+        yield return new WaitForSeconds(dynamicObstaclePresenceDuration);
+        if (currentDynamicObstacle != null) Destroy(currentDynamicObstacle);
+        isDynamicObstaclePresent = false;
+
+
+
     } 
 
     /// <summary>
@@ -65,7 +73,7 @@ public class DynamicObstacleSpawner : MonoBehaviour
     /// </summary>
     void GenerateDynamicObstacle()
     {
-        if (currentDynamicObstacle != null) Destroy(currentDynamicObstacle);
+        
 
         (degreeInt, degree, level) = GetDegreeLevel();
         dynamicObstaclePos = new Vector3(distanceRadii[level] * Mathf.Cos(degree),

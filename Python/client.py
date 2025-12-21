@@ -67,12 +67,15 @@ class SimpleClient:
                     timestamp = data.get('timestamp')
                     interval_number = data.get('intervalNumber')
                     trial_number = data.get('trialNumber')
+                    is_dynamic_obstacle_present = data.get('isDynamicObstaclePresent')
+                    extra_fb_modality = data.get('extraFbModality')
                     degree = data.get('degree')
                     degree_int = data.get('degreeInt')
                     level = data.get('level')
                     right_index_button = data.get('rightIndexButton')
 
-                    print(f"interval_number {interval_number}, trial_number {trial_number}")
+                    print(f"interval_number {interval_number}, trial_number {trial_number}, "
+                          f"is present: {is_dynamic_obstacle_present}, extraFbModality {extra_fb_modality} ")
                     #self.vib.send_vibration_data(degree_int, level)
 
                     # print(f"Received data: {data}")
