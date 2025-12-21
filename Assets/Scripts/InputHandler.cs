@@ -4,32 +4,46 @@ using UnityEngine;
 
 public class InputHandler : MonoBehaviour
 {
+
+    public float keyboardHorizontal;
+    public float keyboardVertical;
+    public Vector2 rightThumbstick;
+    public Vector2 leftThumbstick;
+
+    public bool rightThumbstickButton;
     // Start is called before the first frame update
     void Start()
     {
-        Debug.Log($"sstart");
+
     }
 
     // Update is called once per frame
     void Update()
     {
-        
-        
-        if (OVRInput.GetDown(OVRInput.Button.One))
-        {
-            Debug.Log("A/X button pressed");
-        }
-        Vector2 thumbstick = OVRInput.Get(OVRInput.Axis2D.PrimaryThumbstick);
-        if(thumbstick.magnitude > 0.1f)
-        {
-            Debug.Log($"Thumbstick: {thumbstick}");
-        }
-        Debug.Log($"Thumbsticck: {thumbstick}");
+        UpdateKeyboardInputs();
+        UpdateMetaControllerInputs();
         
     }
 
-    public void LogGenerator()
+    /// <summary>
+    /// Update keyboard inputs
+    /// </summary>
+    void UpdateKeyboardInputs()
     {
-        Debug.Log("Primary 1 is pressed");
+        keyboardHorizontal = Input.GetAxis("Horizontal");
+        keyboardVertical = Input.GetAxis("Vertical");
     }
+
+    /// <summary>
+    /// Updates meta controller inputs
+    /// </summary>
+    void UpdateMetaControllerInputs()
+    {
+        rightThumbstick = OVRInput.Get(OVRInput.Axis2D.SecondaryThumbstick);
+        leftThumbstick = OVRInput.Get(OVRInput.Axis2D.PrimaryThumbstick);
+
+        rightThumbstickButton = OVRInput.Get(OVRInput.Button.SecondaryThumbstick);
+        Debug.Log($"rightThumbButton: {rightThumbstickButton}");
+    }
+
 }

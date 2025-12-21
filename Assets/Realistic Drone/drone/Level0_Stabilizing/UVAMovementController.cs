@@ -8,6 +8,7 @@ public class UVAMovementController : MonoBehaviour
 {
 
     private Rigidbody rb;
+    [SerializeField] private InputHandler inputHandler;
     public float forceMagnitude = 10f;
     public float dampingFactor = 0.9f; // How much to reduce velocity each frame when not actively moving (0.9 means 10% reduction)
                                        // F = ma =>  deltaV = (forceMagnitude / mass ) Time.fixedDeltaTime
@@ -115,8 +116,8 @@ public class UVAMovementController : MonoBehaviour
     /// </summary>
     private void MoveByMetaController()
     {
-        Vector2 rightThumbstick = OVRInput.Get(OVRInput.Axis2D.SecondaryThumbstick);
-        Vector2 leftThumbstick = OVRInput.Get(OVRInput.Axis2D.PrimaryThumbstick);
+        Vector2 rightThumbstick = inputHandler.rightThumbstick;
+        Vector2 leftThumbstick = inputHandler.leftThumbstick;
         Debug.Log($"right thumb x is: {rightThumbstick.x}");
         Debug.Log($"right thumb y is: {rightThumbstick.y}");
 
@@ -142,8 +143,8 @@ public class UVAMovementController : MonoBehaviour
     private void MoveByKeyboard()
     {
 
-        float horizontalInput = Input.GetAxis("Horizontal");
-        float verticalInput   = Input.GetAxis("Vertical");
+        float horizontalInput = inputHandler.keyboardHorizontal;
+        float verticalInput   = inputHandler.keyboardVertical;
 
         if (Mathf.Abs(verticalInput) > stopThreshold)
         {
