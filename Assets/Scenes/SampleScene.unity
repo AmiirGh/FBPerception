@@ -435,7 +435,7 @@ MonoBehaviour:
   keyboardVertical: 0
   rightThumbstick: {x: 0, y: 0}
   leftThumbstick: {x: 0, y: 0}
-  rightThumbstickButton: 0
+  rightIndexButton: 0
 --- !u!1 &172680595
 GameObject:
   m_ObjectHideFlags: 0
@@ -2120,6 +2120,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   dynamicObstacleSpawner: {fileID: 1510882337}
+  inputHandler: {fileID: 171331457}
   receivedData: 
   display: {fileID: 0}
 --- !u!4 &1349659472 stripped

@@ -36,7 +36,7 @@ def receive_data_with_prefix(client_socket):
 
 
 class SimpleClient:
-    def __init__(self, host='192.168.0.105', port=12345):
+    def __init__(self, host='172.17.70.126', port=12345):
         self.client_socket = None
         self.running = True
         self.connect_to_server(host, port)
@@ -64,11 +64,16 @@ class SimpleClient:
             try:
                 data = receive_data_with_prefix(self.client_socket)
                 if data:
+                    timestamp = data.get('timestamp')
+                    interval_number = data.get('intervalNumber')
+                    trial_number = data.get('trialNumber')
                     degree = data.get('degree')
                     degree_int = data.get('degreeInt')
                     level = data.get('level')
-                    print(f"Degree_int {degree_int}, Level: {level}")
-                    self.vib.send_vibration_data(degree_int, level)
+                    right_index_button = data.get('rightIndexButton')
+
+                    print(f"interval_number {interval_number}, trial_number {trial_number}")
+                    #self.vib.send_vibration_data(degree_int, level)
 
                     # print(f"Received data: {data}")
             except Exception as e:
@@ -84,7 +89,7 @@ class SimpleClient:
                 dummy_response = {'tempFromPCtoHMD': 1}
                 send_data_with_prefix(self.client_socket, dummy_response)
                 print(f"Sent dummy data: {dummy_response}")
-                time.sleep(1)  # Send every second
+                time.sleep(10)  # Send every second
             except Exception as e:
                 print(traceback.format_exc())
                 self.running = False

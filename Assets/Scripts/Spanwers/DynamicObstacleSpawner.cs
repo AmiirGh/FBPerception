@@ -16,10 +16,13 @@ public class DynamicObstacleSpawner : MonoBehaviour
     private GameObject currentDynamicObstacle;
     public Vector3 dynamicObstaclePos = new Vector3(0, 0, 0);
     private float timer = 0;
-    public int trialNumber = 0;
+    public int trialNumber = 0; // Is ++ when a new obstacle is generated
+    public int intervalNumber = 0; // is ++ when a new interval (after intervalDuration time) is started
     private float distanceRadius = 10.0f;
     private List<float> distanceRadii = new List<float> { 12, 8, 4 };
-    private float appearanceDuration = 2.0f;
+
+    private float intervalDuration = 10.0f;
+
     void Start()
     {
         
@@ -28,11 +31,12 @@ public class DynamicObstacleSpawner : MonoBehaviour
     void Update()
     {
         timer += Time.deltaTime;
-        if (timer >= appearanceDuration)
+        if (timer >= intervalDuration)
         {
+
+            StartCoroutine(GenerateNewInterval());
             timer = 0;
-            trialNumber++;
-            GenerateDynamicObstacle();
+            intervalNumber++;
         }
     }
     void LateUpdate()
@@ -42,6 +46,23 @@ public class DynamicObstacleSpawner : MonoBehaviour
             currentDynamicObstacle.transform.position = UVATransform.position + new Vector3(dynamicObstaclePos.x, 0, dynamicObstaclePos.z);
         }
     }
+
+    /// <summary>
+    /// This  method starts a new interval (every intervalDuration seconds)
+    /// then generates a random number to randomize the time when a new dynamic obstacle is actually generated.
+    /// </summary>
+    /// <returns></returns>
+    IEnumerator GenerateNewInterval()
+    {
+        float spawnAfter = UnityEngine.Random.Range(0.0f, 4.0f);
+        yield return new WaitForSeconds(spawnAfter);
+        GenerateDynamicObstacle();
+        trialNumber++;
+    } 
+
+    /// <summary>
+    /// Spawns dynamic obstacle
+    /// </summary>
     void GenerateDynamicObstacle()
     {
         if (currentDynamicObstacle != null) Destroy(currentDynamicObstacle);

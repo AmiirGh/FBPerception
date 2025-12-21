@@ -19,6 +19,8 @@ public class TCP : MonoBehaviour
     public static int tempFromPCtoHMD = 0;
 
     [SerializeField] DynamicObstacleSpawner dynamicObstacleSpawner;
+    [SerializeField] InputHandler inputHandler;
+
     public string receivedData = string.Empty;
     private float[] sentData;
     public UnityEngine.UI.Text display;
@@ -31,7 +33,7 @@ public class TCP : MonoBehaviour
 
     async void Start()
     {
-        HOST = "192.168.0.105";
+        HOST = "172.17.70.126";
         PORT = 12345;
         await StartServerAsync();
     }
@@ -134,9 +136,12 @@ public class TCP : MonoBehaviour
                 var dataToSend = new SentData
                 {
                     timestamp = (float)Math.Round((DateTime.Now - startTime).TotalSeconds, 5),
+                    intervalNumber = dynamicObstacleSpawner.intervalNumber,
+                    trialNumber = dynamicObstacleSpawner.trialNumber,
                     degree = dynamicObstacleSpawner.degree,
                     degreeInt = dynamicObstacleSpawner.degreeInt,
                     level = dynamicObstacleSpawner.level,
+                    rightIndexButton = inputHandler.rightIndexButton,
                 };
 
                 string jsonData = JsonConvert.SerializeObject(dataToSend);
@@ -178,9 +183,12 @@ public class TCP : MonoBehaviour
 public class SentData
 {
     public float timestamp;
+    public int intervalNumber;
+    public int trialNumber;
     public float degree;
     public int degreeInt;
     public int level;
+    public float rightIndexButton;
 }
 
 [Serializable]
