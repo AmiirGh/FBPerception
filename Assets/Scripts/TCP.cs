@@ -7,6 +7,8 @@ using System.Threading.Tasks;
 using Newtonsoft.Json;
 using UnityEngine.SceneManagement;
 using System.Linq;
+using Unity.VisualScripting;
+using static Feedbacks;
 
 public class TCP : MonoBehaviour
 {
@@ -34,7 +36,7 @@ public class TCP : MonoBehaviour
 
     async void Start()
     {
-        HOST = "172.17.70.126";
+        HOST = "192.168.0.105";
         PORT = 12345;
         await StartServerAsync();
     }
@@ -144,7 +146,8 @@ public class TCP : MonoBehaviour
                     degreeInt = dynamicObstacleSpawner.degreeInt,
                     level = dynamicObstacleSpawner.level,
                     extraFbModality = feedbacks.extraFbModality,
-                    rightIndexButton = inputHandler.rightIndexButton,
+                    isHapticFeedback = feedbacks.extraFbModality == (int)FbModality.haptic,
+                    rightIndexButton = inputHandler.rightIndexButton
                 };
 
                 string jsonData = JsonConvert.SerializeObject(dataToSend);
@@ -193,6 +196,7 @@ public class SentData
     public int degreeInt;
     public int level;
     public int extraFbModality;
+    public bool isHapticFeedback;
     public float rightIndexButton;
     
 }

@@ -24,6 +24,9 @@ int GetIntensity(int level)
   else if (level == 1) intensity = MED_INTENSITY;
 
   else if (level == 2) intensity = LOW_INTENSITY;
+
+  else if (level == 10) intensity = 0;
+  
   return intensity;
 }
 void setup() {
@@ -94,10 +97,7 @@ void loop() {
           analogWrite(BUZZER_BACK, intensity);
         }
 
-
-
-
-        delay(500);
+        //delay(1900);
       }
     }
   }

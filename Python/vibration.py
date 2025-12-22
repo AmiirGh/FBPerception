@@ -48,7 +48,7 @@ class VibrationClient:
             try:
                 byte_data = struct.pack('4B', arr[0], arr[1], arr[2], arr[3])
                 self.client_socket.sendall(byte_data)
-                print(f"Vibration triggered with intensity {intensity}")
+                #print(f"Vibration triggered with intensity {intensity}")
             except (socket.error, BrokenPipeError):
                 print("Connection lost. Attempting to reconnect...")
                 self.client_socket = None

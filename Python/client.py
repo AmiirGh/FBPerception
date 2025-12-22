@@ -36,7 +36,7 @@ def receive_data_with_prefix(client_socket):
 
 
 class SimpleClient:
-    def __init__(self, host='172.17.70.126', port=12345):
+    def __init__(self, host='192.168.0.105', port=12345):
         self.client_socket = None
         self.running = True
         self.connect_to_server(host, port)
@@ -72,11 +72,16 @@ class SimpleClient:
                     degree = data.get('degree')
                     degree_int = data.get('degreeInt')
                     level = data.get('level')
+                    is_haptic_feedback = data.get('isHapticFeedback')
                     right_index_button = data.get('rightIndexButton')
 
-                    print(f"interval_number {interval_number}, trial_number {trial_number}, "
-                          f"is present: {is_dynamic_obstacle_present}, extraFbModality {extra_fb_modality} ")
-                    #self.vib.send_vibration_data(degree_int, level)
+                    print(f"is present: {is_dynamic_obstacle_present} |  is haptic: {is_haptic_feedback}")
+
+                    if is_haptic_feedback and is_dynamic_obstacle_present:
+                        #as long as that the dynamic obstacle  is present and feedback is haptic sends vibration
+                        self.vib.send_vibration_data(degree_int, level)
+                    else:
+                        self.vib.send_vibration_data(degree_int, 10) # 10 means unspecified and means turn it off
 
                     # print(f"Received data: {data}")
             except Exception as e:

@@ -21,7 +21,7 @@ public class DynamicObstacleSpawner : MonoBehaviour
     private float distanceRadius = 10.0f;
     private List<float> distanceRadii = new List<float> { 12, 8, 4 };
     public bool isDynamicObstaclePresent = false;
-    private float dynamicObstaclePresenceDuration = 2;
+    public float dynamicObstaclePresenceDuration = 5.0f;
     private float intervalDuration = 10.0f;
 
     void Start()

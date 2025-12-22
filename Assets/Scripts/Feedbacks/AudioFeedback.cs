@@ -2,10 +2,16 @@
  using System.IO.Ports;
 using System;
 using System.Threading;
+using static Feedbacks;
+using Oculus.Interaction.Locomotion;
+using System.Collections;
+
 public class AudioFeedback : MonoBehaviour
 {
-    [SerializeField]
-    private DynamicObstacleSpawner dynamicObstacleSpawner;
+
+    [SerializeField] private DynamicObstacleSpawner dynamicObstacleSpawner;
+
+    [SerializeField] private Feedbacks feedbacks;
     SerialPort serial = new SerialPort("COM7", 9600);
     float timer = 0;
     private int prevTrialNumber = -1;
@@ -17,27 +23,63 @@ public class AudioFeedback : MonoBehaviour
         serial.ReadTimeout = 100;
     }
 
-    // Update is called once per frame
     void Update()
     {
-        currentTrialNumber = dynamicObstacleSpawner.trialNumber;
-        if (currentTrialNumber > prevTrialNumber)
-        {
-            prevTrialNumber = currentTrialNumber;
-            if (serial.IsOpen)
+        if (IsNewTrialStarted() && feedbacks.extraFbModality == (int)FbModality.audio)
+        { // a new trial is started and the fb modality is Audio
+            if (dynamicObstacleSpawner.isDynamicObstaclePresent)
             {
-                int level = dynamicObstacleSpawner.level;
-                int degree = dynamicObstacleSpawner.degreeInt;
-                string data = level + "," + degree;
-                Debug.Log($"dataaa: {data}");
-                serial.WriteLine(data);
+                SendAudio();
+                StartCoroutine(TurnBuzzersOff());
+                
             }
         }
-
     }
+
+    IEnumerator TurnBuzzersOff()
+    {
+        yield return new WaitForSeconds(dynamicObstacleSpawner.dynamicObstaclePresenceDuration);
+        if (serial.IsOpen)
+        { // Serial is open and the dynamic obstacle is now present
+            int level = 10;
+            int degree = dynamicObstacleSpawner.degreeInt;
+            string data = level + "," + degree;
+            serial.WriteLine(data);
+        }
+    }
+
+
+    /// <summary>
+    /// Sends level and degree so that the audio buzzers work
+    /// </summary>
+    private void SendAudio()
+    {
+        if (serial.IsOpen && dynamicObstacleSpawner.isDynamicObstaclePresent)
+        { // Serial is open and the dynamic obstacle is now present
+            int level = dynamicObstacleSpawner.level;
+            int degree = dynamicObstacleSpawner.degreeInt;
+            string data = level + "," + degree;
+            serial.WriteLine(data);
+        }
+    }
+
+    public bool IsNewTrialStarted()
+    {
+        if (prevTrialNumber < dynamicObstacleSpawner.trialNumber)
+        {
+            prevTrialNumber = dynamicObstacleSpawner.trialNumber;
+            return true;
+        }
+        else
+            return false;
+    }
+
+
     private void OnApplicationQuit()
     {
         serial.Close();
     }
+
+
    
 }

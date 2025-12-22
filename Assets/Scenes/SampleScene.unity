@@ -3607,12 +3607,13 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2115527888}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: a8369158894750b44a48d6c122122e12, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   dynamicObstacleSpawner: {fileID: 1510882337}
+  feedbacks: {fileID: 1483712066}
 --- !u!1 &2136599061
 GameObject:
   m_ObjectHideFlags: 0
