@@ -36,7 +36,7 @@ public class TCP : MonoBehaviour
 
     async void Start()
     {
-        HOST = "192.168.0.105";
+        HOST = "172.17.70.241";
         PORT = 12345;
         await StartServerAsync();
     }
@@ -147,7 +147,8 @@ public class TCP : MonoBehaviour
                     level = dynamicObstacleSpawner.level,
                     extraFbModality = feedbacks.extraFbModality,
                     isHapticFeedback = feedbacks.extraFbModality == (int)FbModality.haptic,
-                    rightIndexButton = inputHandler.rightIndexButton
+                    rightIndexButton = inputHandler.rightIndexButton,
+                    leftIndexButton = inputHandler.leftIndexButton,
                 };
 
                 string jsonData = JsonConvert.SerializeObject(dataToSend);
@@ -162,6 +163,7 @@ public class TCP : MonoBehaviour
                 await netStream.WriteAsync(jsonDataBytes, 0, jsonDataBytes.Length);
                 Debug.Log($"Sent JSON: {jsonData}");
                 Debug.Log($"length prefix: {lengthPrefix}");
+                await Task.Delay(100);
             }
         }
         catch (Exception ex)
@@ -198,7 +200,7 @@ public class SentData
     public int extraFbModality;
     public bool isHapticFeedback;
     public float rightIndexButton;
-    
+    public float leftIndexButton;
 }
 
 [Serializable]

@@ -436,6 +436,7 @@ MonoBehaviour:
   rightThumbstick: {x: 0, y: 0}
   leftThumbstick: {x: 0, y: 0}
   rightIndexButton: 0
+  leftIndexButton: 0
 --- !u!1 &172680595
 GameObject:
   m_ObjectHideFlags: 0
@@ -2421,6 +2422,7 @@ MonoBehaviour:
   trialNumber: 0
   intervalNumber: 0
   isDynamicObstaclePresent: 0
+  dynamicObstaclePresenceDuration: 5
 --- !u!114 &1510882338
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3584,7 +3586,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &2115527889
 Transform:
   m_ObjectHideFlags: 0

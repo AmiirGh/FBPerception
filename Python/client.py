@@ -5,7 +5,8 @@ import struct
 import threading
 import traceback
 from vibration import *
-
+import csv
+import os
 def send_data_with_prefix(client_socket, data):
     """Send JSON data with a length prefix."""
     json_data = json.dumps(data)
@@ -36,7 +37,7 @@ def receive_data_with_prefix(client_socket):
 
 
 class SimpleClient:
-    def __init__(self, host='192.168.0.105', port=12345):
+    def __init__(self, host='172.17.70.241', port=12345):
         self.client_socket = None
         self.running = True
         self.connect_to_server(host, port)
@@ -59,35 +60,83 @@ class SimpleClient:
                 time.sleep(0.2)
 
     def receive_data(self):
-        """Receive data from server in a separate thread."""
-        while self.running:
-            try:
-                data = receive_data_with_prefix(self.client_socket)
-                if data:
-                    timestamp = data.get('timestamp')
-                    interval_number = data.get('intervalNumber')
-                    trial_number = data.get('trialNumber')
-                    is_dynamic_obstacle_present = data.get('isDynamicObstaclePresent')
-                    extra_fb_modality = data.get('extraFbModality')
-                    degree = data.get('degree')
-                    degree_int = data.get('degreeInt')
-                    level = data.get('level')
-                    is_haptic_feedback = data.get('isHapticFeedback')
-                    right_index_button = data.get('rightIndexButton')
+        """Receive data from server in a separate thread and log values to file."""
 
-                    print(f"is present: {is_dynamic_obstacle_present} |  is haptic: {is_haptic_feedback}")
+        log_file = "received_data.csv"
+        file_exists = os.path.isfile(log_file)
 
-                    if is_haptic_feedback and is_dynamic_obstacle_present:
-                        #as long as that the dynamic obstacle  is present and feedback is haptic sends vibration
-                        self.vib.send_vibration_data(degree_int, level)
-                    else:
-                        self.vib.send_vibration_data(degree_int, 10) # 10 means unspecified and means turn it off
+        try:
+            with open(log_file, mode="a", newline="") as f:
+                writer = csv.writer(f)
 
-                    # print(f"Received data: {data}")
-            except Exception as e:
-                print(traceback.format_exc())
-                self.running = False
-                break
+                # Write header only once
+                if not file_exists:
+                    writer.writerow([
+                        "timestamp",
+                        "interval_number",
+                        "trial_number",
+                        "is_dynamic_obstacle_present",
+                        "extra_fb_modality",
+                        "degree",
+                        "degree_int",
+                        "level",
+                        "is_haptic_feedback",
+                        "right_index_button",
+                        "left_index_button"
+                    ])
+
+                while self.running:
+                    try:
+                        data = receive_data_with_prefix(self.client_socket)
+                        if not data:
+                            continue
+
+                        timestamp = data.get("timestamp")
+                        interval_number = data.get("intervalNumber")
+                        trial_number = data.get("trialNumber")
+                        is_dynamic_obstacle_present = data.get("isDynamicObstaclePresent")
+                        extra_fb_modality = data.get("extraFbModality")
+                        degree = data.get("degree")
+                        degree_int = data.get("degreeInt")
+                        level = data.get("level")
+                        is_haptic_feedback = data.get("isHapticFeedback")
+                        right_index_button = data.get("rightIndexButton")
+                        left_index_button = data.get("leftIndexButton")
+
+                        print(
+                            f"is present: {is_dynamic_obstacle_present} | "
+                            f"is haptic: {is_haptic_feedback}"
+                        )
+
+                        # Log row immediately
+                        writer.writerow([
+                            timestamp,
+                            interval_number,
+                            trial_number,
+                            is_dynamic_obstacle_present,
+                            extra_fb_modality,
+                            degree,
+                            degree_int,
+                            level,
+                            is_haptic_feedback,
+                            right_index_button,
+                            left_index_button
+                        ])
+                        f.flush()  # ensure on-the-go saving
+
+                        if is_haptic_feedback and is_dynamic_obstacle_present:
+                            self.vib.send_vibration_data(degree_int, level)
+                        else:
+                            self.vib.send_vibration_data(degree_int, 10)
+
+                    except Exception:
+                        print(traceback.format_exc())
+                        self.running = False
+                        break
+
+        except Exception:
+            print("Failed to open log file:")
+            print(traceback.format_exc())
 
     def send_dummy_data(self):
         """Send dummy data to server periodically."""
