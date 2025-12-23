@@ -76,13 +76,15 @@ class SimpleClient:
                         "interval_number",
                         "trial_number",
                         "is_dynamic_obstacle_present",
-                        "extra_fb_modality",
                         "degree",
                         "degree_int",
                         "level",
-                        "is_haptic_feedback",
+                        "feedback_modality",
                         "right_index_button",
-                        "left_index_button"
+                        "left_index_button",
+                        "right_thumbstick_x",
+                        "right_thumbstick_y",
+                        "number_of_collision"
                     ])
 
                 while self.running:
@@ -95,17 +97,17 @@ class SimpleClient:
                         interval_number = data.get("intervalNumber")
                         trial_number = data.get("trialNumber")
                         is_dynamic_obstacle_present = data.get("isDynamicObstaclePresent")
-                        extra_fb_modality = data.get("extraFbModality")
                         degree = data.get("degree")
                         degree_int = data.get("degreeInt")
                         level = data.get("level")
-                        is_haptic_feedback = data.get("isHapticFeedback")
+                        feedback_modality = data.get("feedbackModality")
                         right_index_button = data.get("rightIndexButton")
                         left_index_button = data.get("leftIndexButton")
-
+                        right_thumbstick_x = data.get("rightThumbstickX")
+                        right_thumbstick_y = data.get("rightThumbstickY")
+                        number_of_collision = data.get("numberOfCollision")
                         print(
-                            f"is present: {is_dynamic_obstacle_present} | "
-                            f"is haptic: {is_haptic_feedback}"
+                            f"feedback_modality: {feedback_modality} | "
                         )
 
                         # Log row immediately
@@ -114,20 +116,22 @@ class SimpleClient:
                             interval_number,
                             trial_number,
                             is_dynamic_obstacle_present,
-                            extra_fb_modality,
                             degree,
                             degree_int,
                             level,
-                            is_haptic_feedback,
+                            feedback_modality,
                             right_index_button,
-                            left_index_button
+                            left_index_button,
+                            right_thumbstick_x,
+                            right_thumbstick_y,
+                            number_of_collision,
                         ])
                         f.flush()  # ensure on-the-go saving
 
-                        if is_haptic_feedback and is_dynamic_obstacle_present:
-                            self.vib.send_vibration_data(degree_int, level)
-                        else:
-                            self.vib.send_vibration_data(degree_int, 10)
+                        # if feedback_modality == "haptic" and is_dynamic_obstacle_present:
+                        #     self.vib.send_vibration_data(degree_int, level)
+                        # else:
+                        #     self.vib.send_vibration_data(degree_int, 10)
 
                     except Exception:
                         print(traceback.format_exc())

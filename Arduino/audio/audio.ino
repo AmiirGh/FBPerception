@@ -56,41 +56,41 @@ void loop() {
           analogWrite(BUZZER_RIGHT, intensity);
         }
 
-        else if (degree == 1)
+        else if (degree == 45)
         {
           intensity = GetIntensity(level);
           analogWrite(BUZZER_RIGHT, intensity);
           analogWrite(BUZZER_FRONT, intensity);
         }
-        else if (degree == 2)
+        else if (degree == 90)
         {
           intensity = GetIntensity(level);
           analogWrite(BUZZER_RIGHT, intensity);
           analogWrite(BUZZER_FRONT, intensity);
         }
-        else if (degree == 3)
+        else if (degree == 135)
         {
           intensity = GetIntensity(level);
           analogWrite(BUZZER_FRONT, intensity);
           analogWrite(BUZZER_LEFT, intensity);
         }
-        else if (degree == 4)
+        else if (degree == 180)
         {
           intensity = GetIntensity(level);
           analogWrite(BUZZER_LEFT, intensity);
         }
-        else if (degree == 5)
+        else if (degree == 225)
         {
           intensity = GetIntensity(level);
           analogWrite(BUZZER_LEFT, intensity);
           analogWrite(BUZZER_BACK, intensity);
         }
-        else if (degree == 6)
+        else if (degree == 270)
         {
           intensity = GetIntensity(level);
           analogWrite(BUZZER_BACK, intensity);
         }
-        else if (degree == 7)
+        else if (degree == 315)
         {
           intensity = GetIntensity(level);
           analogWrite(BUZZER_RIGHT, intensity);

@@ -5,7 +5,7 @@ public class Feedbacks : MonoBehaviour
     [SerializeField] DynamicObstacleSpawner dynamicObstacleSpawner;
     private int prevIntervalNumber;
     private int prevTrialNumber;
-    public int extraFbModality; // extra means other than visual
+    public string feedbackModality; // extra means other than visual
     void Start()
     {
         
@@ -17,8 +17,34 @@ public class Feedbacks : MonoBehaviour
     {
         if (IsNewTrialStarted())
         {
-            extraFbModality = UnityEngine.Random.Range((int)FbModality.audio, (int)FbModality.haptic+1); // V: 1, A: 2, H:3   So this random generates a feeddback between audio and haptic
-            //extraFbModality = 2;
+            int fbModality = UnityEngine.Random.Range((int)FbModality.visual, (int)FbModality.haptic+1); // V: 1, A: 2, H:3   So this random generates a feeddback between audio and haptic
+            switch (fbModality)
+            {
+                case 1:
+                    feedbackModality = "visual";
+                    break;
+                case 2:
+                    feedbackModality = "audio";
+                    break;
+                case 3:
+                    feedbackModality = "haptic";
+                    break;
+                default:
+                    feedbackModality = "-";
+                    break;
+            }
+            Debug.Log($"feedback modality {feedbackModality}");
+        }
+        else 
+        {
+            if (dynamicObstacleSpawner.isDynamicObstaclePresent)
+            {
+                //do nothing
+            }
+            else
+            {
+                feedbackModality = "-";
+            }
         }
     }
 

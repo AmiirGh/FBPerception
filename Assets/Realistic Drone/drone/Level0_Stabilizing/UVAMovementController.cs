@@ -36,8 +36,7 @@ public class UVAMovementController : MonoBehaviour
     {
         timer += Time.deltaTime;
 
-        //MoveBy("metaController");
-        MoveBy("keyboard");
+        MoveBy("metaController");
 
         ClampPosition();  
     }
@@ -121,7 +120,10 @@ public class UVAMovementController : MonoBehaviour
         Debug.Log($"right thumb x is: {rightThumbstick.x}");
         Debug.Log($"right thumb y is: {rightThumbstick.y}");
 
-        if (Mathf.Abs(leftThumbstick.x) > stopThreshold) rb.AddForce(transform.right * leftThumbstick.x * rightSpeed);
+        Debug.Log($"left thumb x is: {leftThumbstick.x}");
+        Debug.Log($"left thumb y is: {leftThumbstick.y}");
+
+        if (Mathf.Abs(rightThumbstick.x) > stopThreshold) rb.AddForce(transform.right * rightThumbstick.x * rightSpeed);
         else
         {
             rb.AddForce(-rb.linearVelocity.x * dragFactor, 0, 0);

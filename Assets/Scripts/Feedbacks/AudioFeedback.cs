@@ -25,7 +25,7 @@ public class AudioFeedback : MonoBehaviour
 
     void Update()
     {
-        if (IsNewTrialStarted() && feedbacks.extraFbModality == (int)FbModality.audio)
+        if (IsNewTrialStarted() && feedbacks.feedbackModality == "audio")
         { // a new trial is started and the fb modality is Audio
             if (dynamicObstacleSpawner.isDynamicObstaclePresent)
             {
@@ -57,7 +57,7 @@ public class AudioFeedback : MonoBehaviour
         if (serial.IsOpen && dynamicObstacleSpawner.isDynamicObstaclePresent)
         { // Serial is open and the dynamic obstacle is now present
             int level = dynamicObstacleSpawner.level;
-            int degree = dynamicObstacleSpawner.degreeInt;
+            float degree = dynamicObstacleSpawner.degreeDeg;
             string data = level + "," + degree;
             serial.WriteLine(data);
         }

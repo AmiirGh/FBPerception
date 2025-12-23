@@ -10,7 +10,8 @@ public class DynamicObstacleSpawner : MonoBehaviour
     [SerializeField]
     private Transform UVATransform;
 
-    public float degree = 0;
+    public float degreeRad = 0; // degree in radian (0, 2*pi)
+    public float degreeDeg = 0; // degree in degree (0,360)
     public int degreeInt = 0;
     public int level = 0;
     private GameObject currentDynamicObstacle;
@@ -72,10 +73,10 @@ public class DynamicObstacleSpawner : MonoBehaviour
     {
         
 
-        (degreeInt, degree, level) = GetDegreeLevel();
-        dynamicObstaclePos = new Vector3(distanceRadii[level] * Mathf.Cos(degree),
+        (degreeInt, degreeRad, degreeDeg, level) = GetDegreeLevel();
+        dynamicObstaclePos = new Vector3(distanceRadii[level] * Mathf.Cos(degreeRad),
                                          UVATransform.position.y,
-                                         distanceRadii[level] * Mathf.Sin(degree));
+                                         distanceRadii[level] * Mathf.Sin(degreeRad));
         currentDynamicObstacle = Instantiate(dynamicObstacle, UVATransform.position, Quaternion.identity);
     }
 
@@ -83,14 +84,14 @@ public class DynamicObstacleSpawner : MonoBehaviour
     /// returns random values for degree (pi/4, pi/2, 3pi/4, ...) and level (1, 2, 3)
     /// </summary>
     /// <returns></returns>
-    Tuple<int, float, int> GetDegreeLevel()
+    Tuple<int, float, float, int> GetDegreeLevel()
     {
         int degreeInFuncInt = UnityEngine.Random.Range(0, 8);
-        float degreeInFunc = Mathf.PI / 4 * degreeInFuncInt; // in radians
-        
+        float degreeInFuncDeg = degreeInFuncInt * 45.0f; // in degree
+        float degreeInFuncRad = Mathf.PI / 4 * degreeInFuncInt; // in radians
         int levelInFunc = UnityEngine.Random.Range(0, 3);
         Debug.Log($"LevelFunc: {levelInFunc}");
-        return Tuple.Create(degreeInFuncInt, degreeInFunc, levelInFunc);
+        return Tuple.Create(degreeInFuncInt, degreeInFuncRad, degreeInFuncDeg, levelInFunc);
     }
 
 }

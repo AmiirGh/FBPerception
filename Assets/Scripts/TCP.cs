@@ -23,6 +23,7 @@ public class TCP : MonoBehaviour
     [SerializeField] DynamicObstacleSpawner dynamicObstacleSpawner;
     [SerializeField] InputHandler inputHandler;
     [SerializeField] Feedbacks feedbacks;
+    [SerializeField] CollisionDetector collisionDetector;
 
     public string receivedData = string.Empty;
     private float[] sentData;
@@ -142,13 +143,15 @@ public class TCP : MonoBehaviour
                     intervalNumber = dynamicObstacleSpawner.intervalNumber,
                     trialNumber = dynamicObstacleSpawner.trialNumber,
                     isDynamicObstaclePresent = dynamicObstacleSpawner.isDynamicObstaclePresent,
-                    degree = dynamicObstacleSpawner.degree,
+                    degree = dynamicObstacleSpawner.degreeDeg,
                     degreeInt = dynamicObstacleSpawner.degreeInt,
                     level = dynamicObstacleSpawner.level,
-                    extraFbModality = feedbacks.extraFbModality,
-                    isHapticFeedback = feedbacks.extraFbModality == (int)FbModality.haptic,
+                    feedbackModality = feedbacks.feedbackModality,
                     rightIndexButton = inputHandler.rightIndexButton,
                     leftIndexButton = inputHandler.leftIndexButton,
+                    rightThumbstickX = inputHandler.rightThumbstick.x,
+                    rightThumbstickY = inputHandler.rightThumbstick.y,
+                    numberOfCollision = collisionDetector.numberOfCollision,
                 };
 
                 string jsonData = JsonConvert.SerializeObject(dataToSend);
@@ -185,6 +188,7 @@ public class TCP : MonoBehaviour
     {
         Cleanup();
     }
+
 }
 
 [Serializable]
@@ -197,10 +201,13 @@ public class SentData
     public float degree;
     public int degreeInt;
     public int level;
-    public int extraFbModality;
-    public bool isHapticFeedback;
+    public string feedbackModality;
     public float rightIndexButton;
     public float leftIndexButton;
+    public float rightThumbstickX;
+    public float rightThumbstickY;
+    public int numberOfCollision;
+
 }
 
 [Serializable]

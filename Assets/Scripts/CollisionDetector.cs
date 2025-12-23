@@ -3,7 +3,7 @@ using UnityEngine;
 public class CollisionDetector : MonoBehaviour
 {
     // Start is called once before the first execution of Update after the MonoBehaviour is created
-    private int hitCount = 0;
+    public int numberOfCollision = 0;
     void Start()
     {
         
@@ -18,8 +18,8 @@ public class CollisionDetector : MonoBehaviour
     {
         if (other.gameObject.tag == "StaticObstacle")
         {
-            hitCount++;
-            Debug.Log($"hitCount: {hitCount}");
+            numberOfCollision++;
+            Debug.Log($"hitCount: {numberOfCollision}");
         }
     }
 }
