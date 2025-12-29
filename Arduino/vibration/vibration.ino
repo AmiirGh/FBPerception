@@ -1,8 +1,10 @@
 #include <WiFi.h>
 
-const char* ssid = "RAIIS";
-const char* password = "11111111";
+//const char* ssid = "RAIIS";
+const char* ssid = "Amir_Gh";
+//const char* password = "11111111";
 
+const char* password = "amir1234";
 bool pinActive = false;
 unsigned long triggerTime = 0;
 // const unsigned long pulseDuration = 150;  // 150 ms pulse
@@ -24,7 +26,7 @@ const int ledChannel = 0;
 const int resolution = 8;
 void setup() {
   Serial.begin(115200);
-
+  Serial.println("\ntrying to connect");
   WiFi.begin(ssid, password);
   Serial.print("Connecting to WiFi...");
   while (WiFi.status() != WL_CONNECTED) {
@@ -56,10 +58,10 @@ void loop() {
         client.read(data, 4);
 
 
-        ledcWrite(ledPin, data[0]);
-        ledcWrite(ledPin2, data[1]);
-        ledcWrite(ledPin3, data[2]);
-        ledcWrite(ledPin4, data[3]);
+        ledcWrite(ledPin4, data[1]);
+        ledcWrite(ledPin3, data[0]);
+        ledcWrite(ledPin2, data[3]);
+        ledcWrite(ledPin, data[2]);
 
       }
     }

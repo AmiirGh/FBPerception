@@ -19,11 +19,11 @@ int intensity = 0;
 int GetIntensity(int level)
 {
   intensity = 0;
-  if (level == 0) intensity = HIGH_INTENSITY;
+  if (level == 2) intensity = HIGH_INTENSITY;
 
   else if (level == 1) intensity = MED_INTENSITY;
 
-  else if (level == 2) intensity = LOW_INTENSITY;
+  else if (level == 0) intensity = LOW_INTENSITY;
 
   else if (level == 10) intensity = 0;
   
@@ -31,6 +31,10 @@ int GetIntensity(int level)
 }
 void setup() {
   pinMode(BUZZER_FRONT, OUTPUT);
+  pinMode(BUZZER_RIGHT, OUTPUT);
+  pinMode(BUZZER_LEFT, OUTPUT);
+  pinMode(BUZZER_BACK, OUTPUT);
+
   Serial.begin(9600);
 }
 
@@ -49,8 +53,17 @@ void loop() {
 
         int level = levelString.toInt();
         int degree = degreeString.toInt();
+        Serial.println(level);
+        Serial.println(degree);
+        if (level == 10)
+        {
+          analogWrite(BUZZER_FRONT, 0);
+          analogWrite(BUZZER_RIGHT, 0);
+          analogWrite(BUZZER_BACK, 0);
+          analogWrite(BUZZER_LEFT, 0);
 
-        if (degree == 0)
+        }
+        else if (degree == 0)
         {
           intensity = GetIntensity(level);
           analogWrite(BUZZER_RIGHT, intensity);
@@ -65,7 +78,6 @@ void loop() {
         else if (degree == 90)
         {
           intensity = GetIntensity(level);
-          analogWrite(BUZZER_RIGHT, intensity);
           analogWrite(BUZZER_FRONT, intensity);
         }
         else if (degree == 135)

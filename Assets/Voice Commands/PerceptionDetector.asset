@@ -1,18 +1,5 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
---- !u!114 &-540213404012157953
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d1c2918ba0e7451694416d42d69e0944, type: 3}
-  m_Name: WitComposerData
-  m_EditorClassIdentifier: 
-  canvases: []
 --- !u!114 &11400000
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -23,24 +10,80 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: ae5a46bda3295124c99b0e6537ac7252, type: 3}
-  m_Name: CustomNLP
+  m_Name: PerceptionDetector
   m_EditorClassIdentifier: 
-  _clientAccessToken: CNUDT5LFJ4GUS5H4QR6QAEAVXAQVW6K7
+  _clientAccessToken: OUXJYQNKRFDDWD5QHDOYAMUN2V3CHHEM
   editorVersionTag: 
   buildVersionTag: 
   _appInfo:
-    name: PersianCommandDetector
-    id: 2145071712904620
+    name: perceptiondetector
+    id: 1399370638469015
     lang: fa
-    isPrivate: 1
-    createdAt: 2025-12-23T07:33:37-0800
+    isPrivate: 0
+    createdAt: 2025-12-27T22:25:27-0800
     trainingStatus: 1
-    lastTrainDuration: 0
-    lastTrainedAt: 1969-12-31T16:00:00-0800
-    nextTrainAt: 1969-12-31T16:00:00-0800
-    intents: []
+    lastTrainDuration: 154
+    lastTrainedAt: 2025-12-27T22:42:31-0800
+    nextTrainAt: 2025-12-27T22:39:57-0800
+    intents:
+    - id: 1876996589577288
+      name: Far
+      entities: []
+    - id: 2439055676559585
+      name: Five
+      entities: []
+    - id: 1962921574292680
+      name: Four
+      entities: []
+    - id: 3894970744129086
+      name: Middle
+      entities: []
+    - id: 1230073822322603
+      name: Near
+      entities: []
+    - id: 861888379883401
+      name: One
+      entities: []
+    - id: 1276700357827432
+      name: Seven
+      entities: []
+    - id: 1733641774259218
+      name: Six
+      entities: []
+    - id: 2206782983064736
+      name: Three
+      entities: []
+    - id: 849573621038862
+      name: Two
+      entities: []
     entities: []
-    traits: []
+    traits:
+    - name: distance_commands
+      id: 1397950278646911
+      values:
+      - id: 815065154911318
+        value: far
+      - id: 1827858674594923
+        value: middle
+      - id: 847629128158278
+        value: near
+    - name: rotation_commands
+      id: 1405486084419619
+      values:
+      - id: 1379868493866402
+        value: five
+      - id: 1881390042764454
+        value: four
+      - id: 1248466850504713
+        value: one
+      - id: 4130689240481417
+        value: seven
+      - id: 868099615620713
+        value: six
+      - id: 1626288285260586
+        value: three
+      - id: 889497600202613
+        value: two
     versionTags: []
     voices:
     - name: wit$British Butler
@@ -549,8 +592,8 @@ MonoBehaviour:
       - phoneme_events
       - word_events
   _configData:
-  - {fileID: -540213404012157953}
-  _configurationId: 52c32876-e992-4129-8045-606fdda445b8
+  - {fileID: 4219680638546014849}
+  _configurationId: 62acca51-3687-45ab-ab5a-fd260fee9bde
   _requestType: 0
   _requestTimeoutMs: 10000
   endpointConfiguration:
@@ -567,8 +610,21 @@ MonoBehaviour:
   isDemoOnly: 0
   useIntentAttributes: 1
   useConduit: 1
-  _manifestLocalPath: 
+  _manifestLocalPath: ConduitManifest-7522be6a-b639-4ddc-849e-b5a424a14d4b.json
   excludedAssemblies:
   - Oculus.Voice.Demo, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null
   - Meta.WitAi.Samples, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null
   relaxedResolution: 0
+--- !u!114 &4219680638546014849
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d1c2918ba0e7451694416d42d69e0944, type: 3}
+  m_Name: WitComposerData
+  m_EditorClassIdentifier: 
+  canvases: []

@@ -12,7 +12,7 @@ public class VisualFeedback : MonoBehaviour
     [SerializeField] private GameObject feedbackPlane;
     [SerializeField] private Feedbacks feedbacks;
 
-    public Vector3 posOffset = new Vector3(0, -3f, 5.4f);
+    public Vector3 posOffset = new Vector3(0, -1.93f, 7.1f);
     public float multiplier = 0.5f;
     private List<float> feedbackRadii = new List<float> { 1.06f, 1.53f, 2.0f};
 
@@ -35,7 +35,7 @@ public class VisualFeedback : MonoBehaviour
                                                         visFbPos.y,
                                                         multiplier * (dynaObsPos.z) + visFbPos.z);
 
-            float degree = dynamicObstacleSpawner.degreeDeg;
+            float degree = dynamicObstacleSpawner.degreeRad;
             int level = dynamicObstacleSpawner.level;
             float frd = feedbackRadii[level];
             circle.transform.position = new Vector3(frd * Mathf.Cos(degree) + visFbPos.x,

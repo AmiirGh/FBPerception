@@ -10,6 +10,7 @@ public class InputHandler : MonoBehaviour
     public Vector2 rightThumbstick;
     public Vector2 leftThumbstick;
 
+    private int cnt;
     public float rightIndexButton;
     public float leftIndexButton;
     // Start is called before the first frame update
@@ -46,6 +47,12 @@ public class InputHandler : MonoBehaviour
         rightIndexButton = OVRInput.Get(OVRInput.Axis1D.SecondaryIndexTrigger);
         leftIndexButton = OVRInput.Get(OVRInput.Axis1D.PrimaryIndexTrigger);
         Debug.Log($"rightThumbButton: {rightIndexButton}");
+    }
+
+    public void One()
+    {
+        cnt++;
+        Debug.Log($"One: {cnt}");
     }
 
 }
