@@ -16,6 +16,7 @@ public class CollisionDetector : MonoBehaviour
     }
     private void OnTriggerEnter(Collider other)
     {
+        Debug.Log($"hitCount: {numberOfCollision}");
         if (other.gameObject.tag == "StaticObstacle")
         {
             numberOfCollision++;

@@ -13,7 +13,7 @@ public class MyGameManager : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        if (dynamicObstacleSpawner.intervalNumber > 2)
+        if (dynamicObstacleSpawner.intervalNumber > 216) // 8*3*3*9
         {
             Time.timeScale = 0f;
             Application.Quit();

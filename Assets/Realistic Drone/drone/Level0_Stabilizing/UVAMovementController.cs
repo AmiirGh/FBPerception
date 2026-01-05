@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using Unity.VisualScripting;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 public class UVAMovementController : MonoBehaviour
 {
@@ -36,8 +37,9 @@ public class UVAMovementController : MonoBehaviour
     {
         timer += Time.deltaTime;
 
-        MoveBy("metaController");
-
+        //MoveBy("metaController");
+        
+        MoveBy("keyboard");
         ClampPosition();  
     }
 
