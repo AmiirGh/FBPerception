@@ -39,11 +39,10 @@ public class AudioFeedback : MonoBehaviour
     IEnumerator TurnBuzzersOff()
     {
         yield return new WaitForSeconds(dynamicObstacleSpawner.dynamicObstaclePresenceDuration);
-        if (serial.IsOpen)
-        { // Serial is open and the dynamic obstacle is now present
-            int level = 10;
-            int degree = dynamicObstacleSpawner.degreeInt;
-            string data = level + "," + degree;
+        if (serial.IsOpen) 
+        { 
+            int level = 4; // invalid level to turn off
+            string data = level + "," + dynamicObstacleSpawner.degree;
             serial.WriteLine(data);
         }
     }
@@ -57,7 +56,7 @@ public class AudioFeedback : MonoBehaviour
         if (serial.IsOpen && dynamicObstacleSpawner.isDynamicObstaclePresent)
         { // Serial is open and the dynamic obstacle is now present
             int level = dynamicObstacleSpawner.level;
-            float degree = dynamicObstacleSpawner.degreeDeg;
+            float degree = dynamicObstacleSpawner.degree;
             string data = level + "," + degree;
             serial.WriteLine(data);
         }

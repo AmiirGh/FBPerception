@@ -14,7 +14,7 @@ class VibrationClient:
         self.port = port
         self.client_socket = None
         self.connect()
-        self.invalid_degree_int = 10
+        self.invalid_degree = 10
 
     def connect(self):
         """Establishes a persistent connection to the ESP32 with retries."""
@@ -30,7 +30,7 @@ class VibrationClient:
             print(f"Connection failed: {e}")
             self.client_socket = None
 
-    def send_vibration_data(self, degree_int, level):
+    def send_vibration_data(self, degree, level):
         """
         Sends vibration data based on the given intensity.
         Automatically reconnects if disconnected.
@@ -39,7 +39,7 @@ class VibrationClient:
         - intensity: The intensity value (0-255)
         """
         intensity = self.calc_intensity(level)
-        arr = intensity * np.array(self.get_which_vib_motors(degree_int))
+        arr = intensity * np.array(self.get_which_vib_motors(degree))
         if self.client_socket is None:
             print("Reconnecting...")
             self.connect()
@@ -54,35 +54,35 @@ class VibrationClient:
                 self.client_socket = None
                 self.connect()
 
-    def get_which_vib_motors(self, degree_int):
+    def get_which_vib_motors(self, degree):
         motors = [0, 0, 0, 0]
-        if degree_int == self.invalid_degree_int:
+        if degree == self.invalid_degree:
             motors = [0, 0, 0, 0]
-        if degree_int == 0:
+        if degree == 3:
             motors = [1, 0, 0, 0]
-        elif degree_int == 1:
+        elif degree == 2:
             motors = [1, 1, 0, 0]
-        elif degree_int == 2:
+        elif degree == 1:
             motors = [0, 1, 0, 0]
-        elif degree_int == 3:
+        elif degree == 8:
             motors = [0, 1, 1, 0]
-        elif degree_int == 4:
+        elif degree == 7:
             motors = [0, 0, 1, 0]
-        elif degree_int == 5:
+        elif degree == 6:
             motors = [0, 0, 1, 1]
-        elif degree_int == 6:
+        elif degree == 5:
             motors = [0, 0, 0, 1]
-        elif degree_int == 7:
+        elif degree == 4:
             motors = [1, 0, 0, 1]
         return tuple(motors)
 
 
     def calc_intensity(self, level=10): # 10 means invalid
-        if level == 0:
+        if level == 3: # Level means distance. so if it is 3, the intensity is low
             intensity = 100
-        elif level == 1:
-            intensity = 150
         elif level == 2:
+            intensity = 150
+        elif level == 1:
             intensity = 200
         else:
             intensity = 0
@@ -121,6 +121,6 @@ class VibrationClient:
 # Example Usage:
 if __name__ == "__main__":
     vibration_client = VibrationClient()
-    vibration_client.send_vibration_data(degree_int=6, level=2)
+    vibration_client.send_vibration_data(degree=2, level=3)
     time.sleep(1)
     vibration_client.stop_vibration()

@@ -17,23 +17,20 @@ public class Feedbacks : MonoBehaviour
     {
         if (IsNewTrialStarted())
         {
-            int fbModality = UnityEngine.Random.Range((int)FbModality.visual, (int)FbModality.haptic+1); // V: 1, A: 2, H:3   So this random generates a feeddback between audio and haptic
-            fbModality = (int)FbModality.visual;
-            switch (fbModality)
+            //int fbModality = UnityEngine.Random.Range((int)FbModality.visual, (int)FbModality.haptic+1); // V: 1, A: 2, H:3   So this random generates a feeddback between audio and haptic
+            int fbModality = GetFeedbackModality();
+
+            //fbModality = (int)FbModality.visual;
+            if (dynamicObstacleSpawner.isDynamicObstaclePresent)
             {
-                case 1:
-                    feedbackModality = "visual";
-                    break;
-                case 2:
-                    feedbackModality = "audio";
-                    break;
-                case 3:
-                    feedbackModality = "haptic";
-                    break;
-                default:
-                    feedbackModality = "-";
-                    break;
+                if (fbModality == 1) feedbackModality = "visual";
+                else if (fbModality == 2) feedbackModality = "audio";
+                else if (fbModality == 3) feedbackModality = "haptic";
+                else feedbackModality = "-";
             }
+            else feedbackModality = "-";
+
+
             Debug.Log($"feedback modality {feedbackModality}");
         }
         else 
@@ -47,6 +44,24 @@ public class Feedbacks : MonoBehaviour
                 feedbackModality = "-";
             }
         }
+    }
+
+    /// <summary>
+    /// returns feedback modality based on the excel values
+    /// </summary>
+    /// <returns></returns>
+    private int GetFeedbackModality()
+    {
+        int fbmodality = (int)FbModality.invalid;
+        string fbModalityString = dynamicObstacleSpawner.allTrials[dynamicObstacleSpawner.intervalNumber - 1].feedbackModality;
+        if      (fbModalityString == "Visual") 
+            fbmodality = (int)FbModality.visual;
+        else if (fbModalityString == "Audio") 
+            fbmodality = (int)FbModality.audio;
+        else if (fbModalityString == "Haptic") 
+            fbmodality = (int)FbModality.haptic;
+        return fbmodality;
+
     }
 
     /// <summary>
@@ -69,6 +84,7 @@ public class Feedbacks : MonoBehaviour
     {
         visual = 1,
         audio = 2,
-        haptic = 3
+        haptic = 3,
+        invalid = 4
     }
 }

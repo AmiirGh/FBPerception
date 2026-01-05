@@ -3802,9 +3802,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9e6405e6430079240a1e62d45e108f20, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  inputHandler: {fileID: 0}
   forceMagnitude: 10
   dampingFactor: 0.9
   stopThreshold: 0.1
+  xRange: 6
+  yRange: 6
 --- !u!81 &7699411589576714207
 AudioListener:
   m_ObjectHideFlags: 0

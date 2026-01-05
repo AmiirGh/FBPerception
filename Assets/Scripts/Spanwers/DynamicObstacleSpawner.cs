@@ -15,16 +15,25 @@ public class DynamicObstacleSpawner : MonoBehaviour
     public float degreeDeg = 0; // degree in degree (0,360)
     public int degreeInt = 0;
     public int level = 0;
+    public int degree = 0;
     private GameObject currentDynamicObstacle;
     public Vector3 dynamicObstaclePos = new Vector3(0, 0, 0);
     private float timer = 0;
     public int trialNumber = 0; // Is ++ when a new obstacle is generated
     public int intervalNumber = 0; // is ++ when a new interval (after intervalDuration time) is started
     private float distanceRadius = 10.0f;
-    private List<float> distanceRadii = new List<float> { 12, 8, 4 };
+    private List<float> distanceRadii = new List<float> { 4, 8, 12 };
     public bool isDynamicObstaclePresent = false;
     public float dynamicObstaclePresenceDuration;
     private float intervalDuration = 10.0f;
+
+    public enum ditances
+    {
+        near = 1,
+        mid = 2,
+        far = 3,
+        invalid = 4
+    }
 
     [System.Serializable]
     public class TrialData
@@ -67,6 +76,11 @@ public class DynamicObstacleSpawner : MonoBehaviour
             timer = 0;
             intervalNumber++;
         }
+        if(!isDynamicObstaclePresent)
+        {
+            degree = 0;
+            level = 0;
+        }
     }
     void LateUpdate()
     {
@@ -98,20 +112,53 @@ public class DynamicObstacleSpawner : MonoBehaviour
     /// </summary>
     void GenerateDynamicObstacle()
     {
-        
-
-        (degreeInt, degreeRad, degreeDeg, level) = GetDegreeLevel();
-        dynamicObstaclePos = new Vector3(distanceRadii[level] * Mathf.Cos(degreeRad),
+        (level, degree) = GetDegreeLevel();
+        dynamicObstaclePos = new Vector3(distanceRadii[level-1] * Mathf.Cos(DegreeToRad(degree)),
                                          UVATransform.position.y,
-                                         distanceRadii[level] * Mathf.Sin(degreeRad));
+                                         distanceRadii[level-1] * Mathf.Sin(DegreeToRad(degree)));
         currentDynamicObstacle = Instantiate(dynamicObstacle, UVATransform.position, Quaternion.identity);
     }
 
+
+    public float DegreeToRad(int degree)
+    {
+        float rad = 0;
+        if (degree == 1)      rad = 2 * Mathf.PI / 4;
+        else if (degree == 2) rad = 1 * Mathf.PI / 4;
+        else if (degree == 3) rad = 0 * Mathf.PI / 4;
+        else if (degree == 4) rad = 7 * Mathf.PI / 4;
+        else if (degree == 5) rad = 6 * Mathf.PI / 4;
+        else if (degree == 6) rad = 5 * Mathf.PI / 4;
+        else if (degree == 7) rad = 4 * Mathf.PI / 4;
+        else if (degree == 8) rad = 3 * Mathf.PI / 4;
+        return rad;
+    }
+
+
     /// <summary>
-    /// returns random values for degree (pi/4, pi/2, 3pi/4, ...) and level (1, 2, 3)
+    /// based on the trial number, returns the degree, level
     /// </summary>
     /// <returns></returns>
-    Tuple<int, float, float, int> GetDegreeLevel()
+    Tuple<int, int> GetDegreeLevel()
+    {
+        int level = (int)ditances.invalid;
+        if      (allTrials[intervalNumber-1].level == "far")  level = (int)ditances.far;
+        else if (allTrials[intervalNumber-1].level == "mid")  level = (int)ditances.mid;
+        else if (allTrials[intervalNumber-1].level == "near") level = (int)ditances.near;
+        int degree = allTrials[intervalNumber-1].degree;
+        string fbModality = allTrials[intervalNumber - 1].feedbackModality;
+        return Tuple.Create(level, degree);
+    }
+
+
+
+
+    /// <summary>
+    /// returns random values for degree (pi/4, pi/2, 3pi/4, ...) and level (1, 2, 3)
+    /// This method is deprecated since now the degrees and values are generated using the allTrials
+    /// </summary>
+    /// <returns></returns>
+    Tuple<int, float, float, int> GetDegreeLevel_Old()
     {
         int degreeInFuncInt = UnityEngine.Random.Range(0, 8);
         float degreeInFuncDeg = degreeInFuncInt * 45.0f; // in degree
@@ -120,11 +167,15 @@ public class DynamicObstacleSpawner : MonoBehaviour
         Debug.Log($"LevelFunc: {levelInFunc}");
         return Tuple.Create(degreeInFuncInt, degreeInFuncRad, degreeInFuncDeg, levelInFunc);
     }
+
+
     /// <summary>
     /// Reads the unshuffled patterns (3*3*8*3 rows)
     /// </summary>
     /// <param name="path"></param>
     /// <returns>if it could read succesfully</returns>
+    ///
+
     bool ReadCSV(string path)
     {
         if (!File.Exists(path))

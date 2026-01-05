@@ -143,8 +143,7 @@ public class TCP : MonoBehaviour
                     intervalNumber = dynamicObstacleSpawner.intervalNumber,
                     trialNumber = dynamicObstacleSpawner.trialNumber,
                     isDynamicObstaclePresent = dynamicObstacleSpawner.isDynamicObstaclePresent,
-                    degree = dynamicObstacleSpawner.degreeDeg,
-                    degreeInt = dynamicObstacleSpawner.degreeInt,
+                    degree = dynamicObstacleSpawner.degree,
                     level = dynamicObstacleSpawner.level,
                     feedbackModality = feedbacks.feedbackModality,
                     rightIndexButton = inputHandler.rightIndexButton,
@@ -199,7 +198,6 @@ public class SentData
     public int trialNumber;
     public bool isDynamicObstaclePresent;
     public float degree;
-    public int degreeInt;
     public int level;
     public string feedbackModality;
     public float rightIndexButton;

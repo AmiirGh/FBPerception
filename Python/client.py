@@ -77,7 +77,6 @@ class SimpleClient:
                         "trial_number",
                         "is_dynamic_obstacle_present",
                         "degree",
-                        "degree_int",
                         "level",
                         "feedback_modality",
                         "right_index_button",
@@ -98,7 +97,6 @@ class SimpleClient:
                         trial_number = data.get("trialNumber")
                         is_dynamic_obstacle_present = data.get("isDynamicObstaclePresent")
                         degree = data.get("degree")
-                        degree_int = data.get("degreeInt")
                         level = data.get("level")
                         feedback_modality = data.get("feedbackModality")
                         right_index_button = data.get("rightIndexButton")
@@ -107,7 +105,9 @@ class SimpleClient:
                         right_thumbstick_y = data.get("rightThumbstickY")
                         number_of_collision = data.get("numberOfCollision")
                         print(
-                            f"feedback_modality: {feedback_modality} | "
+                            f"feedback_modality: {feedback_modality} | " +
+                            f"feedback_level: {level} |" +
+                            f"feedback_degree: {degree} |"
                         )
 
                         # Log row immediately
@@ -117,7 +117,6 @@ class SimpleClient:
                             trial_number,
                             is_dynamic_obstacle_present,
                             degree,
-                            degree_int,
                             level,
                             feedback_modality,
                             right_index_button,
@@ -129,11 +128,10 @@ class SimpleClient:
                         f.flush()  # ensure on-the-go saving
 
                         if feedback_modality == "haptic" and is_dynamic_obstacle_present:
-                            self.vib.send_vibration_data(degree_int, level)
-                            print("Sent haptic")
+                            self.vib.send_vibration_data(degree, level)
+                            #print("Sent haptic")
                         else:
-                            #self.vib.send_vibration_data(degree_int, 10)
-                            self.vib.send_vibration_data(degree_int, 3)
+                            self.vib.send_vibration_data(degree, 10)
 
 
                     except Exception:
@@ -152,8 +150,8 @@ class SimpleClient:
                 # Send dummy response data
                 dummy_response = {'tempFromPCtoHMD': 1}
                 send_data_with_prefix(self.client_socket, dummy_response)
-                print(f"Sent dummy data: {dummy_response}")
-                time.sleep(10)  # Send every second
+                #print(f"Sent dummy data: {dummy_response}")
+                time.sleep(10)  # Send every 10 second
             except Exception as e:
                 print(traceback.format_exc())
                 self.running = False

@@ -1537,6 +1537,7 @@ GameObject:
   - component: {fileID: 1106440498}
   - component: {fileID: 1106440497}
   - component: {fileID: 1106440502}
+  - component: {fileID: 1106440503}
   m_Layer: 0
   m_Name: '[BuildingBlock] Camera Rig'
   m_TagString: Untagged
@@ -1714,6 +1715,27 @@ MonoBehaviour:
   UVATransform: {fileID: 307974537}
   cameraPositionOffset: {x: 0, y: 0, z: 0}
   cameraRotationOffset: {x: 0, y: 0, z: 0}
+--- !u!65 &1106440503
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1106440496}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 1, y: 1, z: 1}
+  m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &1114187534
 GameObject:
   m_ObjectHideFlags: 0
@@ -2510,11 +2532,13 @@ MonoBehaviour:
   degreeDeg: 0
   degreeInt: 0
   level: 0
+  degree: 0
   dynamicObstaclePos: {x: 0, y: 0, z: 0}
   trialNumber: 0
   intervalNumber: 0
   isDynamicObstaclePresent: 0
   dynamicObstaclePresenceDuration: 5
+  allTrials: []
 --- !u!114 &1510882338
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3733,6 +3757,51 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1976349448}
   m_CullTransparentMesh: 1
+--- !u!1 &1980738411
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1980738412}
+  - component: {fileID: 1980738413}
+  m_Layer: 0
+  m_Name: Game Manager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1980738412
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1980738411}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -2.8773334, y: -17.810896, z: 29.00182}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1980738413
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1980738411}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c9290d9c779cb36468f8e611c082c406, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  dynamicObstacleSpawner: {fileID: 1510882337}
 --- !u!1 &2080589169
 GameObject:
   m_ObjectHideFlags: 0
@@ -4067,3 +4136,4 @@ SceneRoots:
   - {fileID: 2136599065}
   - {fileID: 945535065}
   - {fileID: 171331456}
+  - {fileID: 1980738412}

@@ -35,12 +35,12 @@ public class VisualFeedback : MonoBehaviour
                                                         visFbPos.y,
                                                         multiplier * (dynaObsPos.z) + visFbPos.z);
 
-            float degree = dynamicObstacleSpawner.degreeRad;
+            float rad = dynamicObstacleSpawner.DegreeToRad(dynamicObstacleSpawner.degree);
             int level = dynamicObstacleSpawner.level;
-            float frd = feedbackRadii[level];
-            circle.transform.position = new Vector3(frd * Mathf.Cos(degree) + visFbPos.x,
+            float frd = feedbackRadii[level-1]; // Feedback radius. if level = 1 then near, if level = 2 then mid, ...
+            circle.transform.position = new Vector3(frd * Mathf.Cos(rad) + visFbPos.x,
                                                     transform.position.y,
-                                                    frd * Mathf.Sin(degree) + visFbPos.z);
+                                                    frd * Mathf.Sin(rad) + visFbPos.z);
         }
         else
         {
