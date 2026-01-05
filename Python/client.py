@@ -37,7 +37,7 @@ def receive_data_with_prefix(client_socket):
 
 
 class SimpleClient:
-    def __init__(self, host='172.20.10.4', port=12345):
+    def __init__(self, host='172.16.157.245', port=12345):
         self.client_socket = None
         self.running = True
         self.connect_to_server(host, port)
@@ -83,7 +83,13 @@ class SimpleClient:
                         "left_index_button",
                         "right_thumbstick_x",
                         "right_thumbstick_y",
-                        "number_of_collision"
+                        "number_of_collision",
+                        "head_pos_x",
+                        "head_pos_y",
+                        "head_pos_z",
+                        "head_rot_x",
+                        "head_rot_y",
+                        "head_rot_z",
                     ])
 
                 while self.running:
@@ -96,18 +102,40 @@ class SimpleClient:
                         interval_number = data.get("intervalNumber")
                         trial_number = data.get("trialNumber")
                         is_dynamic_obstacle_present = data.get("isDynamicObstaclePresent")
+
                         degree = data.get("degree")
                         level = data.get("level")
                         feedback_modality = data.get("feedbackModality")
+
                         right_index_button = data.get("rightIndexButton")
                         left_index_button = data.get("leftIndexButton")
+
                         right_thumbstick_x = data.get("rightThumbstickX")
                         right_thumbstick_y = data.get("rightThumbstickY")
+
                         number_of_collision = data.get("numberOfCollision")
+
+                        head_pos_x = data.get("headPosX")
+                        head_pos_y = data.get("headPosY")
+                        head_pos_z = data.get("headPosZ")
+
+                        head_rot_x = data.get("headRotX")
+                        head_rot_y = data.get("headRotY")
+                        head_rot_z = data.get("headRotZ")
+                        # print(
+                        #     f"feedback_modality: {feedback_modality} | " +
+                        #     f"feedback_level: {level} |" +
+                        #     f"feedback_degree: {degree} |"
+                        # )
                         print(
-                            f"feedback_modality: {feedback_modality} | " +
-                            f"feedback_level: {level} |" +
-                            f"feedback_degree: {degree} |"
+                            f"head_pos_x: {head_pos_x} | " +
+                            f"head_pos_y: {head_pos_y} |" +
+                            f"head_pos_z: {head_pos_z} |"
+                        )
+                        print(
+                            f"head_rot_x: {head_rot_x} | " +
+                            f"head_rot_y: {head_rot_y} |" +
+                            f"head_rot_z: {head_rot_z} |"
                         )
 
                         # Log row immediately
@@ -124,6 +152,12 @@ class SimpleClient:
                             right_thumbstick_x,
                             right_thumbstick_y,
                             number_of_collision,
+                            head_pos_x,
+                            head_pos_y,
+                            head_pos_z,
+                            head_rot_x,
+                            head_rot_y,
+                            head_rot_z,
                         ])
                         f.flush()  # ensure on-the-go saving
 

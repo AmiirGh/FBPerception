@@ -9,6 +9,7 @@ using UnityEngine.SceneManagement;
 using System.Linq;
 using Unity.VisualScripting;
 using static Feedbacks;
+using static UnityEngine.Rendering.DebugUI.Table;
 
 public class TCP : MonoBehaviour
 {
@@ -24,12 +25,14 @@ public class TCP : MonoBehaviour
     [SerializeField] InputHandler inputHandler;
     [SerializeField] Feedbacks feedbacks;
     [SerializeField] CollisionDetector collisionDetector;
+    [SerializeField] Transform centerEyeAnchorTransform;
 
     public string receivedData = string.Empty;
     private float[] sentData;
     public UnityEngine.UI.Text display;
     public static Vector3 position;
     private Vector3 rotation;
+    private Vector3 headRotation;
     private DateTime startTime;
     private int tempRew = 10;
     private volatile bool isRunning = true;
@@ -37,7 +40,7 @@ public class TCP : MonoBehaviour
 
     async void Start()
     {
-        HOST = "172.20.10.4";
+        HOST = "172.16.157.245";
         PORT = 12345;
         await StartServerAsync();
     }
@@ -46,6 +49,8 @@ public class TCP : MonoBehaviour
     {
         position = transform.position;
         rotation = transform.eulerAngles;
+
+        headRotation = centerEyeAnchorTransform.localEulerAngles;
     }
 
     private async Task StartServerAsync()
@@ -151,6 +156,14 @@ public class TCP : MonoBehaviour
                     rightThumbstickX = inputHandler.rightThumbstick.x,
                     rightThumbstickY = inputHandler.rightThumbstick.y,
                     numberOfCollision = collisionDetector.numberOfCollision,
+
+                    headPosX = centerEyeAnchorTransform.position.x,
+                    headPosY = centerEyeAnchorTransform.position.y,
+                    headPosZ = centerEyeAnchorTransform.position.z,
+
+                    headRotX = CodeRotToEditorRot(headRotation.x),
+                    headRotY = CodeRotToEditorRot(headRotation.y),
+                    headRotZ = CodeRotToEditorRot(headRotation.z),
                 };
 
                 string jsonData = JsonConvert.SerializeObject(dataToSend);
@@ -173,7 +186,15 @@ public class TCP : MonoBehaviour
             Debug.LogError($"SendData Exception: {ex.Message}");
         }
     }
-
+    /// <summary>
+    /// Changes the code rotation format to editor rotation format
+    /// </summary>
+    /// <param name="rot"></param>
+    /// <returns></returns>
+    private float CodeRotToEditorRot(float rot)
+    {
+        return (rot > 180) ? rot - 360 : rot;
+    }
     private void Cleanup()
     {
         isRunning = false;
@@ -205,7 +226,12 @@ public class SentData
     public float rightThumbstickX;
     public float rightThumbstickY;
     public int numberOfCollision;
-
+    public float headPosX;
+    public float headPosY;
+    public float headPosZ;
+    public float headRotX;
+    public float headRotY;
+    public float headRotZ;
 }
 
 [Serializable]
