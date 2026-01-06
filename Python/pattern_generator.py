@@ -1,6 +1,6 @@
 import csv
 import itertools
-
+import pandas as pd
 
 def create_repeated_experiment_csv():
     # 1. Define your values
@@ -31,6 +31,12 @@ def create_repeated_experiment_csv():
     print(f"Successfully created '{filename}'")
     print(f"Total rows generated: {len(final_data)}")
 
+def read_subject_info():
+    df = pd.read_excel('subject_info.xlsx')
+    subject_name = df.loc[df['Subject_Info'] == 'name', 'Value'].values[0]
+    subject_id = df.loc[df['Subject_Info'] == 'gender', 'Value'].values[0]
+    print(subject_name, subject_id)
 
 if __name__ == "__main__":
     create_repeated_experiment_csv()
+    # read_subject_info()

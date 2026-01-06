@@ -1842,6 +1842,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   numberOfCollision: 0
+  collisionPosition: {x: 0, y: 0, z: 0}
 --- !u!54 &1106440505
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -2281,6 +2282,7 @@ MonoBehaviour:
   feedbacks: {fileID: 1483712066}
   collisionDetector: {fileID: 1106440504}
   centerEyeAnchorTransform: {fileID: 22054841}
+  myGameManager: {fileID: 1980738413}
   receivedData: 
   display: {fileID: 0}
 --- !u!4 &1349659472 stripped
@@ -3981,6 +3983,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   dynamicObstacleSpawner: {fileID: 1510882337}
   centerEyeAnchorTransform: {fileID: 22054841}
+  inputHandler: {fileID: 171331457}
+  timestamp: 0
+  experimentPartNumber: 0
 --- !u!1 &2080589169
 GameObject:
   m_ObjectHideFlags: 0
@@ -4133,7 +4138,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &2115527889
 Transform:
   m_ObjectHideFlags: 0

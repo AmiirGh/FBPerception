@@ -26,6 +26,7 @@ public class TCP : MonoBehaviour
     [SerializeField] Feedbacks feedbacks;
     [SerializeField] CollisionDetector collisionDetector;
     [SerializeField] Transform centerEyeAnchorTransform;
+    [SerializeField] MyGameManager myGameManager;
 
     public string receivedData = string.Empty;
     private float[] sentData;
@@ -34,13 +35,12 @@ public class TCP : MonoBehaviour
     private Vector3 rotation;
     private Vector3 headRotation;
     private DateTime startTime;
-    private int tempRew = 10;
     private volatile bool isRunning = true;
     private static readonly object scoreLock = new object();
 
     async void Start()
     {
-        HOST = "172.16.157.245";
+        HOST = "172.16.157.242";
         PORT = 12345;
         await StartServerAsync();
     }
@@ -156,7 +156,10 @@ public class TCP : MonoBehaviour
                     rightThumbstickX = inputHandler.rightThumbstick.x,
                     rightThumbstickY = inputHandler.rightThumbstick.y,
                     numberOfCollision = collisionDetector.numberOfCollision,
-
+                    
+                    headPosition = $"({centerEyeAnchorTransform.position.x:F2},{centerEyeAnchorTransform.position.y:F2},{centerEyeAnchorTransform.position.z:F2})",
+                    headRotation = $"({CodeRotToEditorRot(headRotation.x):F2},{CodeRotToEditorRot(headRotation.y):F2},{CodeRotToEditorRot(headRotation.z):F2})",
+                    /*
                     headPosX = centerEyeAnchorTransform.position.x,
                     headPosY = centerEyeAnchorTransform.position.y,
                     headPosZ = centerEyeAnchorTransform.position.z,
@@ -164,6 +167,8 @@ public class TCP : MonoBehaviour
                     headRotX = CodeRotToEditorRot(headRotation.x),
                     headRotY = CodeRotToEditorRot(headRotation.y),
                     headRotZ = CodeRotToEditorRot(headRotation.z),
+                    */
+                    collisionPosition = $"({collisionDetector.collisionPosition.x:F2},{collisionDetector.collisionPosition.y:F2},{collisionDetector.collisionPosition.z:F2})"
                 };
 
                 string jsonData = JsonConvert.SerializeObject(dataToSend);
@@ -178,7 +183,7 @@ public class TCP : MonoBehaviour
                 await netStream.WriteAsync(jsonDataBytes, 0, jsonDataBytes.Length);
                 Debug.Log($"Sent JSON: {jsonData}");
                 Debug.Log($"length prefix: {lengthPrefix}");
-                await Task.Delay(100);
+                await Task.Delay(50);
             }
         }
         catch (Exception ex)
@@ -226,12 +231,17 @@ public class SentData
     public float rightThumbstickX;
     public float rightThumbstickY;
     public int numberOfCollision;
+    public string headPosition;
+    public string headRotation;
+    
     public float headPosX;
     public float headPosY;
     public float headPosZ;
     public float headRotX;
     public float headRotY;
     public float headRotZ;
+    
+    public string collisionPosition;
 }
 
 [Serializable]

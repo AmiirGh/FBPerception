@@ -14,7 +14,7 @@ public class StaticObstacleSpawner : MonoBehaviour
 
     private float xRange = 0.0f;
     private float yRange = 0.0f;
-    private float generationRate = 13f;
+    private float generationRate = 15f;
     private GameObject obstacleInstantiated;
     void Start()
     {

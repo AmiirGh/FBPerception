@@ -6,6 +6,7 @@ import threading
 import traceback
 from vibration import *
 import csv
+import pandas as pd
 import os
 def send_data_with_prefix(client_socket, data):
     """Send JSON data with a length prefix."""
@@ -37,15 +38,26 @@ def receive_data_with_prefix(client_socket):
 
 
 class SimpleClient:
-    def __init__(self, host='172.16.157.245', port=12345):
+    def __init__(self, host='172.16.157.242', port=12345):
         self.client_socket = None
         self.running = True
         self.connect_to_server(host, port)
         self.vib = VibrationClient()
         self.invalid_degree_int = 10
         self.invalid_level = 10
+        self.subject_name = "temp"
+        self.subject_id = 0
+
         # Send initial dummy data
         send_data_with_prefix(self.client_socket, {'tempFromPCtoHMD': 1})
+
+
+    def read_subject_info(self):
+        df = pd.read_excel('subject_info.xlsx')
+        self.subject_name = df.loc[df['Subject_Info'] == 'name', 'Value'].values[0]
+        self.subject_id = df.loc[df['Subject_Info'] == 'ID', 'Value'].values[0]
+        print(self.subject_name, self.subject_id)
+
 
     def connect_to_server(self, host, port):
         """Connect to the server with retry logic."""
@@ -62,7 +74,7 @@ class SimpleClient:
     def receive_data(self):
         """Receive data from server in a separate thread and log values to file."""
 
-        log_file = "received_data.csv"
+        log_file = "received_data_" + str(self.subject_name) + "_" + str(self.subject_id) + ".csv"
         file_exists = os.path.isfile(log_file)
 
         try:
@@ -84,12 +96,15 @@ class SimpleClient:
                         "right_thumbstick_x",
                         "right_thumbstick_y",
                         "number_of_collision",
-                        "head_pos_x",
-                        "head_pos_y",
-                        "head_pos_z",
-                        "head_rot_x",
-                        "head_rot_y",
-                        "head_rot_z",
+                        "head_position",
+                        "head_rotation",
+                        # "head_pos_x",
+                        # "head_pos_y",
+                        # "head_pos_z",
+                        # "head_rot_x",
+                        # "head_rot_y",
+                        # "head_rot_z",
+                        "collision_position",
                     ])
 
                 while self.running:
@@ -114,28 +129,13 @@ class SimpleClient:
                         right_thumbstick_y = data.get("rightThumbstickY")
 
                         number_of_collision = data.get("numberOfCollision")
-
-                        head_pos_x = data.get("headPosX")
-                        head_pos_y = data.get("headPosY")
-                        head_pos_z = data.get("headPosZ")
-
-                        head_rot_x = data.get("headRotX")
-                        head_rot_y = data.get("headRotY")
-                        head_rot_z = data.get("headRotZ")
-                        # print(
-                        #     f"feedback_modality: {feedback_modality} | " +
-                        #     f"feedback_level: {level} |" +
-                        #     f"feedback_degree: {degree} |"
-                        # )
+                        head_position = data.get("headPosition")
+                        head_rotation = data.get("headRotation")
+                        collision_position = data.get("collisionPosition")
                         print(
-                            f"head_pos_x: {head_pos_x} | " +
-                            f"head_pos_y: {head_pos_y} |" +
-                            f"head_pos_z: {head_pos_z} |"
-                        )
-                        print(
-                            f"head_rot_x: {head_rot_x} | " +
-                            f"head_rot_y: {head_rot_y} |" +
-                            f"head_rot_z: {head_rot_z} |"
+                            f"time_stamp: {timestamp} | " +
+                            f"head_position: {head_position} | " +
+                            f"head_rotation: {head_rotation} |"
                         )
 
                         # Log row immediately
@@ -152,12 +152,15 @@ class SimpleClient:
                             right_thumbstick_x,
                             right_thumbstick_y,
                             number_of_collision,
-                            head_pos_x,
-                            head_pos_y,
-                            head_pos_z,
-                            head_rot_x,
-                            head_rot_y,
-                            head_rot_z,
+                            head_position,
+                            head_rotation,
+                            # head_pos_x,
+                            # head_pos_y,
+                            # head_pos_z,
+                            # head_rot_x,
+                            # head_rot_y,
+                            # head_rot_z,
+                            collision_position,
                         ])
                         f.flush()  # ensure on-the-go saving
 
@@ -192,6 +195,7 @@ class SimpleClient:
                 break
 
     def start(self):
+        self.read_subject_info()
         """Start the client threads."""
         receiver_thread = threading.Thread(target=self.receive_data, daemon=True)
         receiver_thread.start()
