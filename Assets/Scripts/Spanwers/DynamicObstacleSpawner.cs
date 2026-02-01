@@ -76,7 +76,7 @@ public class DynamicObstacleSpawner : MonoBehaviour
             timer = 0;
             intervalNumber++;
         }
-        if(!isDynamicObstaclePresent)
+        if (!isDynamicObstaclePresent)
         {
             degree = 0;
             level = 0;
@@ -105,7 +105,7 @@ public class DynamicObstacleSpawner : MonoBehaviour
         yield return new WaitForSeconds(dynamicObstaclePresenceDuration);
         if (currentDynamicObstacle != null) Destroy(currentDynamicObstacle);
         isDynamicObstaclePresent = false;
-    } 
+    }
 
     /// <summary>
     /// Spawns dynamic obstacle
@@ -113,9 +113,9 @@ public class DynamicObstacleSpawner : MonoBehaviour
     void GenerateDynamicObstacle()
     {
         (level, degree) = GetDegreeLevel();
-        dynamicObstaclePos = new Vector3(distanceRadii[level-1] * Mathf.Cos(DegreeToRad(degree)),
+        dynamicObstaclePos = new Vector3(distanceRadii[level - 1] * Mathf.Cos(DegreeToRad(degree)),
                                          UVATransform.position.y,
-                                         distanceRadii[level-1] * Mathf.Sin(DegreeToRad(degree)));
+                                         distanceRadii[level - 1] * Mathf.Sin(DegreeToRad(degree)));
         currentDynamicObstacle = Instantiate(dynamicObstacle, UVATransform.position, Quaternion.identity);
     }
 
@@ -123,7 +123,7 @@ public class DynamicObstacleSpawner : MonoBehaviour
     public float DegreeToRad(int degree)
     {
         float rad = 0;
-        if (degree == 1)      rad = 2 * Mathf.PI / 4;
+        if (degree == 1) rad = 2 * Mathf.PI / 4;
         else if (degree == 2) rad = 1 * Mathf.PI / 4;
         else if (degree == 3) rad = 0 * Mathf.PI / 4;
         else if (degree == 4) rad = 7 * Mathf.PI / 4;
@@ -142,10 +142,10 @@ public class DynamicObstacleSpawner : MonoBehaviour
     Tuple<int, int> GetDegreeLevel()
     {
         int level = (int)ditances.invalid;
-        if      (allTrials[intervalNumber-1].level == "far")  level = (int)ditances.far;
-        else if (allTrials[intervalNumber-1].level == "mid")  level = (int)ditances.mid;
-        else if (allTrials[intervalNumber-1].level == "near") level = (int)ditances.near;
-        int degree = allTrials[intervalNumber-1].degree;
+        if (allTrials[intervalNumber - 1].level == "far") level = (int)ditances.far;
+        else if (allTrials[intervalNumber - 1].level == "mid") level = (int)ditances.mid;
+        else if (allTrials[intervalNumber - 1].level == "near") level = (int)ditances.near;
+        int degree = allTrials[intervalNumber - 1].degree;
         string fbModality = allTrials[intervalNumber - 1].feedbackModality;
         return Tuple.Create(level, degree);
     }

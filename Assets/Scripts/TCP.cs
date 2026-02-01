@@ -40,7 +40,7 @@ public class TCP : MonoBehaviour
 
     async void Start()
     {
-        HOST = "172.16.157.242";
+        HOST = "127.0.0.1";
         PORT = 12345;
         await StartServerAsync();
     }

@@ -38,7 +38,7 @@ def receive_data_with_prefix(client_socket):
 
 
 class SimpleClient:
-    def __init__(self, host='172.16.157.242', port=12345):
+    def __init__(self, host="127.0.0.1", port=12345):
         self.client_socket = None
         self.running = True
         self.connect_to_server(host, port)
@@ -165,11 +165,12 @@ class SimpleClient:
                         f.flush()  # ensure on-the-go saving
 
                         if feedback_modality == "haptic" and is_dynamic_obstacle_present:
+
                             self.vib.send_vibration_data(degree, level)
                             #print("Sent haptic")
                         else:
                             self.vib.send_vibration_data(degree, 10)
-
+                            continue
 
                     except Exception:
                         print(traceback.format_exc())
