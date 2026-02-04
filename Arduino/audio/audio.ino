@@ -1,8 +1,12 @@
 // Using Arduino Mege. Pins 2 to 13 are PWM
-const int BUZZER_RIGHT = 2;
-const int BUZZER_FRONT = 6;
-const int BUZZER_LEFT = 10;
-const int BUZZER_BACK = 12;
+const int BUZZER_FRONT = 2;
+const int BUZZER_FRONT_RIGHT = 3;
+const int BUZZER_RIGHT = 4;
+const int BUZZER_BACK_RIGHT = 5;
+const int BUZZER_BACK = 6;
+const int BUZZER_BACK_LEFT = 7;
+const int BUZZER_LEFT = 8;
+const int BUZZER_FRONT_LEFT = 9;
 
 
 const int TONE_FREQ = 1000; // Choose a clear frequency, e.g., 1000 Hz
@@ -34,6 +38,10 @@ void setup() {
   pinMode(BUZZER_RIGHT, OUTPUT);
   pinMode(BUZZER_LEFT, OUTPUT);
   pinMode(BUZZER_BACK, OUTPUT);
+  pinMode(BUZZER_FRONT_RIGHT, OUTPUT);
+  pinMode(BUZZER_FRONT_LEFT, OUTPUT);
+  pinMode(BUZZER_BACK_LEFT, OUTPUT);
+  pinMode(BUZZER_BACK_RIGHT, OUTPUT);
 
   Serial.begin(9600);
 }
@@ -65,8 +73,7 @@ void loop() {
         else if (degree == 2)
         {
           intensity = GetIntensity(level);
-          analogWrite(BUZZER_RIGHT, intensity);
-          analogWrite(BUZZER_FRONT, intensity);
+          analogWrite(BUZZER_FRONT_RIGHT, intensity);
         }
         else if (degree == 1)
         {
@@ -76,8 +83,7 @@ void loop() {
         else if (degree == 8)
         {
           intensity = GetIntensity(level);
-          analogWrite(BUZZER_FRONT, intensity);
-          analogWrite(BUZZER_LEFT, intensity);
+          analogWrite(BUZZER_FRONT_LEFT, intensity);
         }
         else if (degree == 7)
         {
@@ -87,8 +93,7 @@ void loop() {
         else if (degree == 6)
         {
           intensity = GetIntensity(level);
-          analogWrite(BUZZER_LEFT, intensity);
-          analogWrite(BUZZER_BACK, intensity);
+          analogWrite(BUZZER_BACK_LEFT, intensity);
         }
         else if (degree == 5)
         {
@@ -98,8 +103,7 @@ void loop() {
         else if (degree == 4)
         {
           intensity = GetIntensity(level);
-          analogWrite(BUZZER_RIGHT, intensity);
-          analogWrite(BUZZER_BACK, intensity);
+          analogWrite(BUZZER_BACK_RIGHT, intensity);
         }
         else
         {
@@ -107,6 +111,10 @@ void loop() {
           analogWrite(BUZZER_RIGHT, 0);
           analogWrite(BUZZER_BACK, 0);
           analogWrite(BUZZER_LEFT, 0);
+          analogWrite(BUZZER_FRONT_RIGHT, 0);
+          analogWrite(BUZZER_FRONT_LEFT, 0);
+          analogWrite(BUZZER_BACK_RIGHT, 0);
+          analogWrite(BUZZER_BACK_LEFT, 0);
         }
 
         //delay(1900);

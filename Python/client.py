@@ -132,11 +132,8 @@ class SimpleClient:
                         head_position = data.get("headPosition")
                         head_rotation = data.get("headRotation")
                         collision_position = data.get("collisionPosition")
-                        print(
-                            f"time_stamp: {timestamp} | " +
-                            f"head_position: {head_position} | " +
-                            f"head_rotation: {head_rotation} |"
-                        )
+                        self.print_important_data(degree=degree, level=level, feedback_modality=feedback_modality,
+                                                  number_of_collision=number_of_collision)
 
                         # Log row immediately
                         writer.writerow([
@@ -162,15 +159,14 @@ class SimpleClient:
                             # head_rot_z,
                             collision_position,
                         ])
-                        f.flush()  # ensure on-the-go saving
+                        f.flush()
 
                         if feedback_modality == "haptic" and is_dynamic_obstacle_present:
-
+                            # continue
                             self.vib.send_vibration_data(degree, level)
-                            #print("Sent haptic")
                         else:
                             self.vib.send_vibration_data(degree, 10)
-                            continue
+                            # continue
 
                     except Exception:
                         print(traceback.format_exc())
@@ -180,6 +176,10 @@ class SimpleClient:
         except Exception:
             print("Failed to open log file:")
             print(traceback.format_exc())
+
+    def print_important_data(self, degree, level, feedback_modality, number_of_collision):
+        print(f"Degree: {degree} | Level: {level} | fb_mod: {feedback_modality} | noCollision: {number_of_collision}")
+
 
     def send_dummy_data(self):
         """Send dummy data to server periodically."""

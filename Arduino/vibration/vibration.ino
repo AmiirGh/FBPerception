@@ -2,7 +2,8 @@
 
 //const char* ssid = "RAIIS";
 const char* ssid = "Amir_Gh";
-//const char* password = "11111111";
+// const char* ssid = "UT-WiFi";
+// const char* password = "11111111";
 
 const char* password = "amir1234";
 bool pinActive = false;
@@ -14,10 +15,10 @@ unsigned long triggerTime = 0;
 const uint16_t port = 12345;
 WiFiServer server(port);
 
-const int ledPin = 19;
-const int ledPin2 = 26;
-const int ledPin3 = 23;
-const int ledPin4 = 27;
+const int VIBRATOR_LEFT = 19;
+const int VIBRATOR_BACK = 26;
+const int VIBRATOR_RIGHT = 23;
+const int VIBRATOR_FRONT = 27;
 
 volatile bool dataReceivedInterrupt = false;
 
@@ -40,11 +41,10 @@ void setup() {
   Serial.print("IP Address: ");
   Serial.println(WiFi.localIP());
 
-
-    ledcAttach(ledPin , freq , resolution);
-    ledcAttach(ledPin2 , freq , resolution);
-    ledcAttach(ledPin3 , freq , resolution);
-    ledcAttach(ledPin4 , freq , resolution);
+  ledcAttach(VIBRATOR_LEFT , freq , resolution);
+  ledcAttach(VIBRATOR_BACK , freq , resolution);
+  ledcAttach(VIBRATOR_RIGHT , freq , resolution);
+  ledcAttach(VIBRATOR_FRONT , freq , resolution);
 
 }
 
@@ -58,10 +58,15 @@ void loop() {
         client.read(data, 4);
 
 
-        ledcWrite(ledPin4, data[1]);
-        ledcWrite(ledPin3, data[0]);
-        ledcWrite(ledPin2, data[3]);
-        ledcWrite(ledPin, data[2]);
+        ledcWrite(VIBRATOR_FRONT, data[1]);
+        ledcWrite(VIBRATOR_RIGHT, data[0]);
+        ledcWrite(VIBRATOR_BACK, data[3]);
+        ledcWrite(VIBRATOR_LEFT, data[2]);
+
+        // ledcWrite(ledPin4, data[1]);
+        // ledcWrite(ledPin3, data[0]);
+        // ledcWrite(ledPin2, data[3]);
+        // ledcWrite(ledPin, data[2]);
 
       }
     }

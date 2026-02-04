@@ -38,7 +38,7 @@ class VibrationClient:
         Args:
         - intensity: The intensity value (0-255)
         """
-        intensity = self.calc_intensity(level)
+        intensity = self.calc_intensity(level, degree)
         arr = intensity * np.array(self.get_which_vib_motors(degree))
         if self.client_socket is None:
             print("Reconnecting...")
@@ -76,12 +76,30 @@ class VibrationClient:
             motors = [1, 0, 0, 1]
         return tuple(motors)
 
-
-    def calc_intensity(self, level=10): # 10 means invalid
+    ###
+    #level 1: Near
+    #level 2: Mid
+    #level 3: Far
+    ###
+    def calc_intensity(self, level=10, degree=10): # 10 means invalid
         if level == 3: # Level means distance. so if it is 3, the intensity is low
-            intensity = 100
+            if degree == 1:
+                intensity = 90
+            elif degree == 3:
+                intensity = 130
+            elif degree == 5:
+                intensity = 90
+            else:
+                intensity = 100
         elif level == 2:
-            intensity = 150
+            if degree == 1:
+                intensity = 130
+            elif degree == 3:
+                intensity = 167
+            elif degree == 5:
+                intensity = 142
+            else:
+                intensity = 150
         elif level == 1:
             intensity = 200
         else:
@@ -121,6 +139,6 @@ class VibrationClient:
 # Example Usage:
 if __name__ == "__main__":
     vibration_client = VibrationClient()
-    vibration_client.send_vibration_data(degree=2, level=3)
+    vibration_client.send_vibration_data(degree=7, level=1)
     time.sleep(1)
     vibration_client.stop_vibration()

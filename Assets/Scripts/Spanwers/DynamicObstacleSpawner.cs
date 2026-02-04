@@ -113,9 +113,7 @@ public class DynamicObstacleSpawner : MonoBehaviour
     void GenerateDynamicObstacle()
     {
         (level, degree) = GetDegreeLevel();
-        dynamicObstaclePos = new Vector3(distanceRadii[level - 1] * Mathf.Cos(DegreeToRad(degree)),
-                                         UVATransform.position.y,
-                                         distanceRadii[level - 1] * Mathf.Sin(DegreeToRad(degree)));
+        dynamicObstaclePos = new Vector3(distanceRadii[level - 1] * Mathf.Cos(DegreeToRad(degree)), UVATransform.position.y, distanceRadii[level - 1] * Mathf.Sin(DegreeToRad(degree)));
         currentDynamicObstacle = Instantiate(dynamicObstacle, UVATransform.position, Quaternion.identity);
     }
 
@@ -137,6 +135,9 @@ public class DynamicObstacleSpawner : MonoBehaviour
 
     /// <summary>
     /// based on the trial number, returns the degree, level
+    /// level 1: Near
+    /// level 2: Mid
+    /// Level 3: Far
     /// </summary>
     /// <returns></returns>
     Tuple<int, int> GetDegreeLevel()
