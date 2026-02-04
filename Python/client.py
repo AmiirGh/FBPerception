@@ -8,6 +8,11 @@ from vibration import *
 import csv
 import pandas as pd
 import os
+import subprocess
+import sys
+import sounddevice as sd
+from scipy.io.wavfile import write
+
 def send_data_with_prefix(client_socket, data):
     """Send JSON data with a length prefix."""
     json_data = json.dumps(data)
@@ -42,16 +47,16 @@ class SimpleClient:
         self.client_socket = None
         self.running = True
         self.connect_to_server(host, port)
-        self.vib = VibrationClient()
+        # self.vib = VibrationClient()
         self.invalid_degree_int = 10
         self.invalid_level = 10
         self.subject_name = "temp"
         self.subject_id = 0
-
-        # Send initial dummy data
-        send_data_with_prefix(self.client_socket, {'tempFromPCtoHMD': 1})
-
-
+        self.experiment_phase = 0
+        self.old_experiment_phase = 0
+        self.part_number = 0 # there are 3 parts all the same
+        self.prev_timestamp = 1
+        self.isFirstTimeRecording = True
     def read_subject_info(self):
         df = pd.read_excel('subject_info.xlsx')
         self.subject_name = df.loc[df['Subject_Info'] == 'name', 'Value'].values[0]
@@ -110,9 +115,9 @@ class SimpleClient:
                 while self.running:
                     try:
                         data = receive_data_with_prefix(self.client_socket)
+
                         if not data:
                             continue
-
                         timestamp = data.get("timestamp")
                         interval_number = data.get("intervalNumber")
                         trial_number = data.get("trialNumber")
@@ -132,8 +137,8 @@ class SimpleClient:
                         head_position = data.get("headPosition")
                         head_rotation = data.get("headRotation")
                         collision_position = data.get("collisionPosition")
-                        self.print_important_data(degree=degree, level=level, feedback_modality=feedback_modality,
-                                                  number_of_collision=number_of_collision)
+                        self.print_important_data(timestamp=timestamp, degree=degree, level=level, feedback_modality=feedback_modality,
+                                                  number_of_collision=number_of_collision, interval_number=interval_number)
 
                         # Log row immediately
                         writer.writerow([
@@ -162,12 +167,19 @@ class SimpleClient:
                         f.flush()
 
                         if feedback_modality == "haptic" and is_dynamic_obstacle_present:
-                            # continue
-                            self.vib.send_vibration_data(degree, level)
+                            t = 1
+                            # self.vib.send_vibration_data(degree, level)
                         else:
-                            self.vib.send_vibration_data(degree, 10)
-                            # continue
+                            # self.vib.send_vibration_data(degree, 10)
+                            t = 1
+                        if timestamp - self.prev_timestamp > 10 or self.isFirstTimeRecording: # a new part is started
+                            self.isFirstTimeRecording = False
+                            script_dir = os.path.dirname(os.path.abspath(__file__))
+                            recorder_path = os.path.join(script_dir, "audio_recorder.py")
+                            self.experiment_phase += 1
+                            process = subprocess.Popen([sys.executable, recorder_path])
 
+                        self.prev_timestamp = timestamp
                     except Exception:
                         print(traceback.format_exc())
                         self.running = False
@@ -177,8 +189,9 @@ class SimpleClient:
             print("Failed to open log file:")
             print(traceback.format_exc())
 
-    def print_important_data(self, degree, level, feedback_modality, number_of_collision):
-        print(f"Degree: {degree} | Level: {level} | fb_mod: {feedback_modality} | noCollision: {number_of_collision}")
+    def print_important_data(self, timestamp, degree, level, feedback_modality, number_of_collision, interval_number):
+        print(f"Timestamp: {timestamp} | Degree: {degree} | Level: {level} | fb_mod: {feedback_modality} "
+              f"| noCollision: {number_of_collision} | intervNo: {interval_number}")
 
 
     def send_dummy_data(self):
@@ -195,6 +208,7 @@ class SimpleClient:
                 self.running = False
                 break
 
+
     def start(self):
         self.read_subject_info()
         """Start the client threads."""
@@ -202,6 +216,8 @@ class SimpleClient:
         receiver_thread.start()
         sender_thread = threading.Thread(target=self.send_dummy_data, daemon=True)
         sender_thread.start()
+        # audio_record_thread = threading.Thread(target=self.record_audio, daemon=True)
+        # audio_record_thread.start()
 
         try:
             while self.running:

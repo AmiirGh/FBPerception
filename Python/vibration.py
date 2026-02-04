@@ -139,6 +139,6 @@ class VibrationClient:
 # Example Usage:
 if __name__ == "__main__":
     vibration_client = VibrationClient()
-    vibration_client.send_vibration_data(degree=7, level=1)
+    vibration_client.send_vibration_data(degree=8, level=1)
     time.sleep(1)
     vibration_client.stop_vibration()

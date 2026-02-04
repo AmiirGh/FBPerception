@@ -64,7 +64,7 @@ public class TCP : MonoBehaviour
             netStream = client.GetStream();
             Debug.Log("Client connected.");
             startTime = DateTime.Now;
-            _ = ReceiveDataAsync();
+            // _ = ReceiveDataAsync();
             _ = SendDataAsync();
         }
         catch (SocketException ex)
@@ -144,6 +144,7 @@ public class TCP : MonoBehaviour
             {
                 var dataToSend = new SentData
                 {
+                    //timestamp = myGameManager.timestamp,
                     timestamp = (float)Math.Round((DateTime.Now - startTime).TotalSeconds, 5),
                     intervalNumber = dynamicObstacleSpawner.intervalNumber,
                     trialNumber = dynamicObstacleSpawner.trialNumber,
@@ -156,7 +157,7 @@ public class TCP : MonoBehaviour
                     rightThumbstickX = inputHandler.rightThumbstick.x,
                     rightThumbstickY = inputHandler.rightThumbstick.y,
                     numberOfCollision = collisionDetector.numberOfCollision,
-                    
+
                     headPosition = $"({centerEyeAnchorTransform.position.x:F2},{centerEyeAnchorTransform.position.y:F2},{centerEyeAnchorTransform.position.z:F2})",
                     headRotation = $"({CodeRotToEditorRot(headRotation.x):F2},{CodeRotToEditorRot(headRotation.y):F2},{CodeRotToEditorRot(headRotation.z):F2})",
                     /*
@@ -191,6 +192,10 @@ public class TCP : MonoBehaviour
             Debug.LogError($"SendData Exception: {ex.Message}");
         }
     }
+
+
+
+
     /// <summary>
     /// Changes the code rotation format to editor rotation format
     /// </summary>
