@@ -10,7 +10,7 @@ public class MyGameManager : MonoBehaviour
     [SerializeField] private InputHandler inputHandler;
     private DateTime partStartTime;
     public float unityTimestamp = 0;
-    public int experimentPartNumber = 1; // Experiment has 3 sections. 1, 2, 3 each 12 minutes
+    public int experimentPartNumber = 1; // Experiment has 3 parts. 1, 2, 3 each 12 minutes
     private bool isExperimentStarted = false;
     public float timestamp;
 
@@ -47,18 +47,18 @@ public class MyGameManager : MonoBehaviour
     /// </summary>
     private void CheckBreakTimes()
     {
-        if (experimentPartNumber == 1 && dynamicObstacleSpawner.intervalNumber > 2) //72
+        if (experimentPartNumber == 1 && dynamicObstacleSpawner.intervalNumber > 72) //72
         {
             EditorApplication.isPaused = true;
             experimentPartNumber = 2;
         }
-        else if (experimentPartNumber == 2 && dynamicObstacleSpawner.intervalNumber > 4) // 144
+        else if (experimentPartNumber == 2 && dynamicObstacleSpawner.intervalNumber > 144) // 144
         {
             EditorApplication.isPaused = true;
             experimentPartNumber = 3;
         }
 
-        else if (experimentPartNumber == 3 && dynamicObstacleSpawner.intervalNumber > 6) // 216
+        else if (experimentPartNumber == 3 && dynamicObstacleSpawner.intervalNumber > 216) // 216
         {
             Time.timeScale = 0f;
             Application.Quit();

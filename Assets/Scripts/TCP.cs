@@ -145,7 +145,7 @@ public class TCP : MonoBehaviour
                 var dataToSend = new SentData
                 {
                     //timestamp = myGameManager.timestamp,
-                    timestamp = (float)Math.Round((DateTime.Now - startTime).TotalSeconds, 5),
+                    timestamp = (float)Math.Round((DateTime.Now - startTime).TotalSeconds, 2),
                     intervalNumber = dynamicObstacleSpawner.intervalNumber,
                     trialNumber = dynamicObstacleSpawner.trialNumber,
                     isDynamicObstaclePresent = dynamicObstacleSpawner.isDynamicObstaclePresent,

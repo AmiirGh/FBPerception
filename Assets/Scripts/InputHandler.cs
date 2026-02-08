@@ -41,8 +41,8 @@ public class InputHandler : MonoBehaviour
     /// </summary>
     void UpdateMetaControllerInputs()
     {
-        rightThumbstick = OVRInput.Get(OVRInput.Axis2D.SecondaryThumbstick);
-        leftThumbstick = OVRInput.Get(OVRInput.Axis2D.PrimaryThumbstick);
+        leftThumbstick = OVRInput.Get(OVRInput.Axis2D.SecondaryThumbstick);
+        rightThumbstick = OVRInput.Get(OVRInput.Axis2D.PrimaryThumbstick);
 
         rightIndexButton = OVRInput.Get(OVRInput.Axis1D.SecondaryIndexTrigger);
         leftIndexButton = OVRInput.Get(OVRInput.Axis1D.PrimaryIndexTrigger);

@@ -3784,6 +3784,7 @@ MonoBehaviour:
   inputHandler: {fileID: 171331457}
   unityTimestamp: 0
   experimentPartNumber: 0
+  timestamp: 0
 --- !u!1 &2080589169
 GameObject:
   m_ObjectHideFlags: 0

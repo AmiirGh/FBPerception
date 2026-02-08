@@ -47,7 +47,7 @@ class SimpleClient:
         self.client_socket = None
         self.running = True
         self.connect_to_server(host, port)
-        # self.vib = VibrationClient()
+        self.vib = VibrationClient()
         self.invalid_degree_int = 10
         self.invalid_level = 10
         self.subject_name = "temp"
@@ -86,7 +86,6 @@ class SimpleClient:
             with open(log_file, mode="a", newline="") as f:
                 writer = csv.writer(f)
 
-                # Write header only once
                 if not file_exists:
                     writer.writerow([
                         "timestamp",
@@ -168,16 +167,13 @@ class SimpleClient:
 
                         if feedback_modality == "haptic" and is_dynamic_obstacle_present:
                             t = 1
-                            # self.vib.send_vibration_data(degree, level)
+                            self.vib.send_vibration_data(degree, level)
                         else:
-                            # self.vib.send_vibration_data(degree, 10)
+                            self.vib.send_vibration_data(degree, 10)
                             t = 1
                         if timestamp - self.prev_timestamp > 10 or self.isFirstTimeRecording: # a new part is started
-                            self.isFirstTimeRecording = False
-                            script_dir = os.path.dirname(os.path.abspath(__file__))
-                            recorder_path = os.path.join(script_dir, "audio_recorder.py")
-                            self.experiment_phase += 1
-                            process = subprocess.Popen([sys.executable, recorder_path])
+                            self.run_audio_recorder()
+
 
                         self.prev_timestamp = timestamp
                     except Exception:
@@ -193,6 +189,12 @@ class SimpleClient:
         print(f"Timestamp: {timestamp} | Degree: {degree} | Level: {level} | fb_mod: {feedback_modality} "
               f"| noCollision: {number_of_collision} | intervNo: {interval_number}")
 
+    def run_audio_recorder(self):
+        self.isFirstTimeRecording = False
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        recorder_path = os.path.join(script_dir, "audio_recorder.py")
+        self.experiment_phase += 1
+        process = subprocess.Popen([sys.executable, recorder_path])
 
     def send_dummy_data(self):
         """Send dummy data to server periodically."""
