@@ -15,7 +15,7 @@ int incoming_level = 0;   // The level received from Unity (0, 1, 2, or 3)
 
 // --- Intensity Values ---
 const int LOW_INTENSITY = 1; //1
-const int MED_INTENSITY = 3; //3
+const int  MED_INTENSITY = 4; //3
 const int HIGH_INTENSITY = 30; //30
 int PREV_INTENSITY = 150;
 int intensity = 0;

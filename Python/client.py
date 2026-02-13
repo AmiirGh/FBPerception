@@ -77,8 +77,6 @@ class SimpleClient:
                 time.sleep(0.2)
 
     def receive_data(self):
-        """Receive data from server in a separate thread and log values to file."""
-
         log_file = "received_data_" + str(self.subject_name) + "_" + str(self.subject_id) + ".csv"
         file_exists = os.path.isfile(log_file)
 
@@ -102,13 +100,9 @@ class SimpleClient:
                         "number_of_collision",
                         "head_position",
                         "head_rotation",
-                        # "head_pos_x",
-                        # "head_pos_y",
-                        # "head_pos_z",
-                        # "head_rot_x",
-                        # "head_rot_y",
-                        # "head_rot_z",
                         "collision_position",
+                        "generation_rate",
+                        "forward_speed",
                     ])
 
                 while self.running:
@@ -136,6 +130,8 @@ class SimpleClient:
                         head_position = data.get("headPosition")
                         head_rotation = data.get("headRotation")
                         collision_position = data.get("collisionPosition")
+                        generation_rate = data.get("generationRate")
+                        forward_speed = data.get("forward_speed")
                         self.print_important_data(timestamp=timestamp, degree=degree, level=level, feedback_modality=feedback_modality,
                                                   number_of_collision=number_of_collision, interval_number=interval_number)
 
@@ -155,13 +151,9 @@ class SimpleClient:
                             number_of_collision,
                             head_position,
                             head_rotation,
-                            # head_pos_x,
-                            # head_pos_y,
-                            # head_pos_z,
-                            # head_rot_x,
-                            # head_rot_y,
-                            # head_rot_z,
                             collision_position,
+                            generation_rate,
+                            forward_speed
                         ])
                         f.flush()
 

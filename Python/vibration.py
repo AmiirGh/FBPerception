@@ -102,6 +102,11 @@ class VibrationClient:
                 intensity = 150
         elif level == 1:
             intensity = 200
+        elif level == 80:
+            intensity = 80
+        elif level == 255:
+            intensity = 255
+
         else:
             intensity = 0
         return intensity
@@ -139,6 +144,6 @@ class VibrationClient:
 # Example Usage:
 if __name__ == "__main__":
     vibration_client = VibrationClient()
-    vibration_client.send_vibration_data(degree=3, level=2)
-    time.sleep(1)
-    vibration_client.stop_vibration()
+    vibration_client.send_vibration_data(degree=1, level=255)
+    time.sleep(10)
+    vibration_client.stop_vibration() # R1, L1 increase
