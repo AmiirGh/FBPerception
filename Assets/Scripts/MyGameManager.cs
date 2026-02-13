@@ -13,9 +13,9 @@ public class MyGameManager : MonoBehaviour
     public int experimentPhase = 0; // Experiment has 3 phases. each 12 minutes
     private bool isExperimentStarted = false;
     public float timestamp;
-    public float generationRate = 0;
-    public float forwardSpeed = 0;
-    public float sObstacleGenExactOnUvaProb = 0.1f; // The probability to generate the static obstacles at the exact uva xz
+    public float generationRate = 0; // static obstacle generation rate per second
+    public float forwardSpeed = 0; // the uva forward speed in z direction
+    public float sObstacleGenExactOnUvaProb = 0; // The probability to generate the static obstacles at the exact uva x,y
     private bool isPaused = false;
 
     private int experimentType = 0; // Experiment types are range from 1 to 6.  1: easy,hard,expert | 2: hard,easy,expert | ... | 3: expert,hard,easy
@@ -24,8 +24,7 @@ public class MyGameManager : MonoBehaviour
     {
         experimentPhase = 0;
         experimentType = 1; // 1 or 2 or 3 or ... or 6. Change this number before each participant starts.
-        //(forwardSpeed, generationRate) = GetGenerationRateForwardSpeed(experimentType, experimentPhase);
-        sObstacleGenExactOnUvaProb = 0.1f;
+        //sObstacleGenExactOnUvaProb = 0.1f;
 
     }
 
@@ -34,7 +33,7 @@ public class MyGameManager : MonoBehaviour
     {
         CheckBreakTimes();
         UpdateHeadRotation();
-        Debug.Log($"Int nu: {dynamicObstacleSpawner.intervalNumber}, Type:{experimentType}, Phase:{experimentPhase}, forspeed: {forwardSpeed}, genrate: {generationRate}");
+        Debug.Log($"Int nu: {dynamicObstacleSpawner.intervalNumber}, Type:{experimentType}, Phase:{experimentPhase}, forspeed: {forwardSpeed}, genrate: {generationRate}, Genonuvaprob: {sObstacleGenExactOnUvaProb}");
     }
 
     private void UpdateHeadRotation()
@@ -56,23 +55,23 @@ public class MyGameManager : MonoBehaviour
         if (experimentPhase == 0)
         {
             experimentPhase = 1;
-            (forwardSpeed, generationRate) = GetGenerationRateForwardSpeed(experimentType, experimentPhase);
+            (forwardSpeed, generationRate, sObstacleGenExactOnUvaProb) = GetGenerationRateForwardSpeed(experimentType, experimentPhase);
         }
 
-        else if (experimentPhase == 1 && dynamicObstacleSpawner.intervalNumber > 72) //72
+        else if (experimentPhase == 1 && dynamicObstacleSpawner.intervalNumber > 2) //72
         {
             EditorApplication.isPaused = true;
             experimentPhase = 2;
-            (forwardSpeed, generationRate) = GetGenerationRateForwardSpeed(experimentType, experimentPhase);
+            (forwardSpeed, generationRate, sObstacleGenExactOnUvaProb) = GetGenerationRateForwardSpeed(experimentType, experimentPhase);
         }
-        else if (experimentPhase == 2 && dynamicObstacleSpawner.intervalNumber > 144) // 144
+        else if (experimentPhase == 2 && dynamicObstacleSpawner.intervalNumber > 4) // 144
         {
             EditorApplication.isPaused = true;
             experimentPhase = 3;
-            (forwardSpeed, generationRate) = GetGenerationRateForwardSpeed(experimentType, experimentPhase);
+            (forwardSpeed, generationRate, sObstacleGenExactOnUvaProb) = GetGenerationRateForwardSpeed(experimentType, experimentPhase);
         }
 
-        else if (experimentPhase == 3 && dynamicObstacleSpawner.intervalNumber > 216) // 216
+        else if (experimentPhase == 3 && dynamicObstacleSpawner.intervalNumber > 6) // 216
         {
             Time.timeScale = 0f;
             Application.Quit();
@@ -85,54 +84,54 @@ public class MyGameManager : MonoBehaviour
     /// <param name="experimentType"></param>  indicates the order of the easy, hard, expert which adds up t0 6 types
     /// <param name="experimentPhase"></param> indicates the phase which we have 3, each 12 minutes
     /// <returns>forwardSpeed & generationRate</returns>
-    Tuple<float, float> GetGenerationRateForwardSpeed(int experimentType, int experimentPhase)
+    Tuple<float, float, float> GetGenerationRateForwardSpeed(int experimentType, int experimentPhase)
     {
-        Tuple<float, float> genrateForspeed = Tuple.Create((float)forwardSpeeds.invalid, (float)generationRates.invalid); // genration rate and forward speed tuple
+        Tuple<float, float, float> genrateForspeedGenonuvaprob = Tuple.Create((float)forwardSpeeds.invalid, (float)generationRates.invalid, (float)sObstacleGenExactOnUvaProbs.invalid); // genration rate and forward speed tuple
 
         if (experimentType == 1)
         { // easy, hard, expert
-            if      (experimentPhase == 1) genrateForspeed =  Tuple.Create((float)forwardSpeeds.easy, (float)generationRates.easy);
-            else if (experimentPhase == 2) genrateForspeed = Tuple.Create((float)forwardSpeeds.hard, (float)generationRates.hard);
-            else if (experimentPhase == 3) genrateForspeed = Tuple.Create((float)forwardSpeeds.expert, (float)generationRates.expert);
-            else                           genrateForspeed = Tuple.Create((float)forwardSpeeds.invalid, (float)generationRates.invalid);
+            if      (experimentPhase == 1) genrateForspeedGenonuvaprob = Tuple.Create((float)forwardSpeeds.easy, (float)generationRates.easy, (float)(int)sObstacleGenExactOnUvaProbs.easy / 1000);
+            else if (experimentPhase == 2) genrateForspeedGenonuvaprob = Tuple.Create((float)forwardSpeeds.hard, (float)generationRates.hard, (float)(int)sObstacleGenExactOnUvaProbs.hard / 1000);
+            else if (experimentPhase == 3) genrateForspeedGenonuvaprob = Tuple.Create((float)forwardSpeeds.expert, (float)generationRates.expert, (float)(int)sObstacleGenExactOnUvaProbs.expert / 1000);
+            else                           genrateForspeedGenonuvaprob = Tuple.Create((float)forwardSpeeds.invalid, (float)generationRates.invalid, (float)(int)sObstacleGenExactOnUvaProbs.invalid / 1000);
         }
         else if (experimentType == 2)
         { // hard, easy, expert
-            if      (experimentPhase == 1) genrateForspeed = Tuple.Create((float)forwardSpeeds.hard, (float)generationRates.hard);
-            else if (experimentPhase == 2) genrateForspeed = Tuple.Create((float)forwardSpeeds.easy, (float)generationRates.easy);
-            else if (experimentPhase == 3) genrateForspeed = Tuple.Create((float)forwardSpeeds.expert, (float)generationRates.expert);
-            else                           genrateForspeed = Tuple.Create((float)forwardSpeeds.invalid, (float)generationRates.invalid);
+            if      (experimentPhase == 1) genrateForspeedGenonuvaprob = Tuple.Create((float)forwardSpeeds.hard, (float)generationRates.hard, (float)(int)sObstacleGenExactOnUvaProbs.hard / 1000);
+            else if (experimentPhase == 2) genrateForspeedGenonuvaprob = Tuple.Create((float)forwardSpeeds.easy, (float)generationRates.easy, (float)(int)sObstacleGenExactOnUvaProbs.easy / 1000);
+            else if (experimentPhase == 3) genrateForspeedGenonuvaprob = Tuple.Create((float)forwardSpeeds.expert, (float)generationRates.expert, (float)(int)sObstacleGenExactOnUvaProbs.expert / 1000);
+            else                           genrateForspeedGenonuvaprob = Tuple.Create((float)forwardSpeeds.invalid, (float)generationRates.invalid, (float)(int)sObstacleGenExactOnUvaProbs.invalid / 1000);
         }
         else if (experimentType == 3)
         { // expert, hard, easy
-            if      (experimentPhase == 1) genrateForspeed = Tuple.Create((float)forwardSpeeds.expert, (float)generationRates.expert);
-            else if (experimentPhase == 2) genrateForspeed = Tuple.Create((float)forwardSpeeds.hard, (float)generationRates.hard);
-            else if (experimentPhase == 3) genrateForspeed = Tuple.Create((float)forwardSpeeds.easy, (float)generationRates.easy);
-            else                           genrateForspeed = Tuple.Create((float)forwardSpeeds.invalid, (float)generationRates.invalid);
+            if      (experimentPhase == 1) genrateForspeedGenonuvaprob = Tuple.Create((float)forwardSpeeds.expert, (float)generationRates.expert, (float)(int)sObstacleGenExactOnUvaProbs.expert / 1000);
+            else if (experimentPhase == 2) genrateForspeedGenonuvaprob = Tuple.Create((float)forwardSpeeds.hard, (float)generationRates.hard, (float)(int)sObstacleGenExactOnUvaProbs.hard / 1000);
+            else if (experimentPhase == 3) genrateForspeedGenonuvaprob = Tuple.Create((float)forwardSpeeds.easy, (float)generationRates.easy, (float)(int)sObstacleGenExactOnUvaProbs.easy / 1000);
+            else                           genrateForspeedGenonuvaprob = Tuple.Create((float)forwardSpeeds.invalid, (float)generationRates.invalid, (float)(int)sObstacleGenExactOnUvaProbs.invalid / 1000);
         }
         else if (experimentType == 4)
         { // easy, expert, hard
-            if      (experimentPhase == 1) genrateForspeed = Tuple.Create((float)forwardSpeeds.easy, (float)generationRates.easy);
-            else if (experimentPhase == 2) genrateForspeed = Tuple.Create((float)forwardSpeeds.expert, (float)generationRates.expert);
-            else if (experimentPhase == 3) genrateForspeed = Tuple.Create((float)forwardSpeeds.hard, (float)generationRates.hard);
-            else                           genrateForspeed = Tuple.Create((float)forwardSpeeds.invalid, (float)generationRates.invalid);
+            if      (experimentPhase == 1) genrateForspeedGenonuvaprob = Tuple.Create((float)forwardSpeeds.easy, (float)generationRates.easy, (float)(int)sObstacleGenExactOnUvaProbs.easy / 1000);
+            else if (experimentPhase == 2) genrateForspeedGenonuvaprob = Tuple.Create((float)forwardSpeeds.expert, (float)generationRates.expert, (float)(int)sObstacleGenExactOnUvaProbs.expert / 1000);
+            else if (experimentPhase == 3) genrateForspeedGenonuvaprob = Tuple.Create((float)forwardSpeeds.hard, (float)generationRates.hard, (float)(int)sObstacleGenExactOnUvaProbs.hard / 1000);
+            else                           genrateForspeedGenonuvaprob = Tuple.Create((float)forwardSpeeds.invalid, (float)generationRates.invalid, (float)(int)sObstacleGenExactOnUvaProbs.invalid / 1000);
         }
         else if (experimentType == 5)
         { // hard, expert, easy
-            if      (experimentPhase == 1) genrateForspeed = Tuple.Create((float)forwardSpeeds.hard, (float)generationRates.hard);
-            else if (experimentPhase == 2) genrateForspeed = Tuple.Create((float)forwardSpeeds.expert, (float)generationRates.expert);
-            else if (experimentPhase == 3) genrateForspeed = Tuple.Create((float)forwardSpeeds.easy, (float)generationRates.easy);
-            else                           genrateForspeed = Tuple.Create((float)forwardSpeeds.invalid, (float)generationRates.invalid);
+            if      (experimentPhase == 1) genrateForspeedGenonuvaprob = Tuple.Create((float)forwardSpeeds.hard, (float)generationRates.hard, (float)(int)sObstacleGenExactOnUvaProbs.hard / 1000);
+            else if (experimentPhase == 2) genrateForspeedGenonuvaprob = Tuple.Create((float)forwardSpeeds.expert, (float)generationRates.expert, (float)(int)sObstacleGenExactOnUvaProbs.expert / 1000);
+            else if (experimentPhase == 3) genrateForspeedGenonuvaprob = Tuple.Create((float)forwardSpeeds.easy, (float)generationRates.easy, (float)(int)sObstacleGenExactOnUvaProbs.easy / 1000);
+            else                           genrateForspeedGenonuvaprob = Tuple.Create((float)forwardSpeeds.invalid, (float)generationRates.invalid, (float)(int)sObstacleGenExactOnUvaProbs.invalid / 1000);
         }
         else if (experimentType == 6)
         { // expert, easy, hard
-            if      (experimentPhase == 1) genrateForspeed = Tuple.Create((float)forwardSpeeds.expert, (float)generationRates.expert);
-            else if (experimentPhase == 2) genrateForspeed = Tuple.Create((float)forwardSpeeds.easy, (float)generationRates.easy);
-            else if (experimentPhase == 3) genrateForspeed = Tuple.Create((float)forwardSpeeds.hard, (float)generationRates.hard);
-            else                           genrateForspeed = Tuple.Create((float)forwardSpeeds.invalid, (float)generationRates.invalid);
+            if      (experimentPhase == 1) genrateForspeedGenonuvaprob = Tuple.Create((float)forwardSpeeds.expert, (float)generationRates.expert, (float)(int)sObstacleGenExactOnUvaProbs.expert / 1000);
+            else if (experimentPhase == 2) genrateForspeedGenonuvaprob = Tuple.Create((float)forwardSpeeds.easy, (float)generationRates.easy, (float)(int)sObstacleGenExactOnUvaProbs.easy / 1000);
+            else if (experimentPhase == 3) genrateForspeedGenonuvaprob = Tuple.Create((float)forwardSpeeds.hard, (float)generationRates.hard, (float)(int)sObstacleGenExactOnUvaProbs.hard / 1000);
+            else                           genrateForspeedGenonuvaprob = Tuple.Create((float)forwardSpeeds.invalid, (float)generationRates.invalid, (float)(int)sObstacleGenExactOnUvaProbs.invalid / 1000);
         }
 
-        return genrateForspeed;
+        return genrateForspeedGenonuvaprob;
     }
     
     public enum forwardSpeeds
@@ -147,6 +146,14 @@ public class MyGameManager : MonoBehaviour
         easy = 15,
         hard = 23,
         expert = 30,
+        invalid = 0
+    }
+
+    public enum sObstacleGenExactOnUvaProbs
+    { // it will be devided by 1000
+        easy = 50,
+        hard = 60,
+        expert = 70,
         invalid = 0
     }
 
