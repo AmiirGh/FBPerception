@@ -30,7 +30,7 @@ public class StaticObstacleSpawner : MonoBehaviour
         timer += Time.deltaTime;
         if (timer >= (1 / myGameManager.generationRate)) {
             timer = 0;
-            GenerateStaticObstacle(myGameManager.sObstacleGenExactOnUvaProb);
+            GenerateStaticObstacle(myGameManager.sObstacleGenExactOnPlayerProb);
         }
     }
 

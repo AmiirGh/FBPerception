@@ -16,9 +16,11 @@ def read_subject_info():
     return subject_name, subject_id
 
 if __name__ == "__main__":
-    experiment_phase = 3
+    experiment_phase = 1
     subject_name, subject_id = read_subject_info()
-    record_audio(f"audio_{subject_name}_{subject_id}_{experiment_phase}.wav", duration=12*60) # 12 minutes (each part of the experiment is 12 minute long)
+    duration = 72*10+10 if experiment_phase == 1 else 72*10 # for phase 1, we need 10 more seconds so that we capture the last command
+                                                            # 72 is for 72 intervals each 10 seconds
+    record_audio(f"audio_{subject_name}_{subject_id}_{experiment_phase}.wav", duration=duration) # 12 minutes (each part of the experiment is 12 minute long)
 
 
 

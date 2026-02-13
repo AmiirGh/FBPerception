@@ -10,6 +10,7 @@ using System.Linq;
 using Unity.VisualScripting;
 using static Feedbacks;
 using static UnityEngine.Rendering.DebugUI.Table;
+using static MyGameManager;
 
 public class TCP : MonoBehaviour
 {
@@ -158,7 +159,8 @@ public class TCP : MonoBehaviour
                     headRotation = $"({CodeRotToEditorRot(headRotation.x):F2},{CodeRotToEditorRot(headRotation.y):F2},{CodeRotToEditorRot(headRotation.z):F2})",
                     collisionPosition = $"({collisionDetector.collisionPosition.x:F2},{collisionDetector.collisionPosition.y:F2},{collisionDetector.collisionPosition.z:F2})",
                     generationRate = myGameManager.generationRate,
-                    forwardSpeed = myGameManager.forwardSpeed
+                    forwardSpeed = myGameManager.forwardSpeed,
+                    sObstacleGenExactOnPlayerProb = myGameManager.sObstacleGenExactOnPlayerProb
                 };
 
                 string jsonData = JsonConvert.SerializeObject(dataToSend);
@@ -236,6 +238,7 @@ public class SentData
     public string collisionPosition;
     public float generationRate;
     public float forwardSpeed;
+    public float sObstacleGenExactOnPlayerProb;
 }
 
 [Serializable]

@@ -103,6 +103,7 @@ class SimpleClient:
                         "collision_position",
                         "generation_rate",
                         "forward_speed",
+                        "s_obstacle_gen_on_player_prob"
                     ])
 
                 while self.running:
@@ -131,7 +132,8 @@ class SimpleClient:
                         head_rotation = data.get("headRotation")
                         collision_position = data.get("collisionPosition")
                         generation_rate = data.get("generationRate")
-                        forward_speed = data.get("forward_speed")
+                        forward_speed = data.get("forwardSpeed")
+                        s_obstacle_gen_on_player_prob = data.get("sObstacleGenExactOnPlayerProb")
                         self.print_important_data(timestamp=timestamp, degree=degree, level=level, feedback_modality=feedback_modality,
                                                   number_of_collision=number_of_collision, interval_number=interval_number)
 
@@ -153,7 +155,8 @@ class SimpleClient:
                             head_rotation,
                             collision_position,
                             generation_rate,
-                            forward_speed
+                            forward_speed,
+                            s_obstacle_gen_on_player_prob
                         ])
                         f.flush()
 
