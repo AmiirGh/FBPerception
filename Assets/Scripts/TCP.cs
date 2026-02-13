@@ -21,16 +21,15 @@ public class TCP : MonoBehaviour
     private NetworkStream netStream;
     public static int tempFromPCtoHMD = 0;
 
-    [SerializeField] DynamicObstacleSpawner dynamicObstacleSpawner;
-    [SerializeField] InputHandler inputHandler;
-    [SerializeField] Feedbacks feedbacks;
-    [SerializeField] CollisionDetector collisionDetector;
-    [SerializeField] Transform centerEyeAnchorTransform;
-    [SerializeField] MyGameManager myGameManager;
+    [SerializeField] private DynamicObstacleSpawner dynamicObstacleSpawner;
+    [SerializeField] private InputHandler inputHandler;
+    [SerializeField] private Feedbacks feedbacks;
+    [SerializeField] private CollisionDetector collisionDetector;
+    [SerializeField] private Transform centerEyeAnchorTransform;
+    [SerializeField] private MyGameManager myGameManager;
 
     public string receivedData = string.Empty;
     private float[] sentData;
-    public UnityEngine.UI.Text display;
     public static Vector3 position;
     private Vector3 rotation;
     private Vector3 headRotation;
@@ -137,14 +136,12 @@ public class TCP : MonoBehaviour
 
     private async Task SendDataAsync()
     {
-        //private int tempRew = 10;
         try
         {
             while (isRunning && netStream != null && netStream.CanWrite)
             {
                 var dataToSend = new SentData
                 {
-                    //timestamp = myGameManager.timestamp,
                     timestamp = (float)Math.Round((DateTime.Now - startTime).TotalSeconds, 2),
                     intervalNumber = dynamicObstacleSpawner.intervalNumber,
                     trialNumber = dynamicObstacleSpawner.trialNumber,
@@ -157,19 +154,11 @@ public class TCP : MonoBehaviour
                     rightThumbstickX = inputHandler.rightThumbstick.x,
                     rightThumbstickY = inputHandler.rightThumbstick.y,
                     numberOfCollision = collisionDetector.numberOfCollision,
-
                     headPosition = $"({centerEyeAnchorTransform.position.x:F2},{centerEyeAnchorTransform.position.y:F2},{centerEyeAnchorTransform.position.z:F2})",
                     headRotation = $"({CodeRotToEditorRot(headRotation.x):F2},{CodeRotToEditorRot(headRotation.y):F2},{CodeRotToEditorRot(headRotation.z):F2})",
-                    /*
-                    headPosX = centerEyeAnchorTransform.position.x,
-                    headPosY = centerEyeAnchorTransform.position.y,
-                    headPosZ = centerEyeAnchorTransform.position.z,
-
-                    headRotX = CodeRotToEditorRot(headRotation.x),
-                    headRotY = CodeRotToEditorRot(headRotation.y),
-                    headRotZ = CodeRotToEditorRot(headRotation.z),
-                    */
-                    collisionPosition = $"({collisionDetector.collisionPosition.x:F2},{collisionDetector.collisionPosition.y:F2},{collisionDetector.collisionPosition.z:F2})"
+                    collisionPosition = $"({collisionDetector.collisionPosition.x:F2},{collisionDetector.collisionPosition.y:F2},{collisionDetector.collisionPosition.z:F2})",
+                    generationRate = myGameManager.generationRate,
+                    forwardSpeed = myGameManager.forwardSpeed
                 };
 
                 string jsonData = JsonConvert.SerializeObject(dataToSend);
@@ -192,8 +181,6 @@ public class TCP : MonoBehaviour
             Debug.LogError($"SendData Exception: {ex.Message}");
         }
     }
-
-
 
 
     /// <summary>
@@ -247,6 +234,8 @@ public class SentData
     public float headRotZ;
     
     public string collisionPosition;
+    public float generationRate;
+    public float forwardSpeed;
 }
 
 [Serializable]

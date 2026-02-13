@@ -10,6 +10,7 @@ public class UVAMovementController : MonoBehaviour
 
     private Rigidbody rb;
     [SerializeField] private InputHandler inputHandler;
+    [SerializeField] private MyGameManager myGameManager;
     public float forceMagnitude = 10f;
     public float dampingFactor = 0.9f; // How much to reduce velocity each frame when not actively moving (0.9 means 10% reduction)
                                        // F = ma =>  deltaV = (forceMagnitude / mass ) Time.fixedDeltaTime
@@ -23,7 +24,6 @@ public class UVAMovementController : MonoBehaviour
     private float maxVelocity = 10.0f;
     private float upSpeed = 15.0f;
     private float rightSpeed = 15.0f;
-    private float forwardSpeed = 15.0f;
     public float xRange = 6.0f;
     public float yRange = 6.0f;
     private float dragFactor = 5.0f;
@@ -37,7 +37,7 @@ public class UVAMovementController : MonoBehaviour
     {
         timer += Time.deltaTime;
 
-        MoveBy("metaController");
+        MoveBy("keyboard"); //metaController
         ClampPosition();  
     }
 
@@ -135,7 +135,7 @@ public class UVAMovementController : MonoBehaviour
             rb.AddForce(0, -rb.linearVelocity.y * dragFactor, 0);
         }
         Vector3 currentVelocity = rb.linearVelocity;
-        currentVelocity.z = forwardSpeed;
+        currentVelocity.z = myGameManager.forwardSpeed;
         rb.linearVelocity = currentVelocity;
     }
 
@@ -167,7 +167,7 @@ public class UVAMovementController : MonoBehaviour
         }
 
         Vector3 currentVelocity = rb.linearVelocity;
-        currentVelocity.z = forwardSpeed;
+        currentVelocity.z = myGameManager.forwardSpeed;
         rb.linearVelocity = currentVelocity;
     }
 
