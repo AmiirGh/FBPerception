@@ -37,7 +37,7 @@ public class UVAMovementController : MonoBehaviour
     {
         timer += Time.deltaTime;
 
-        MoveBy("keyboard"); //metaController
+        MoveBy("metaController"); //keyboard
         ClampPosition();  
     }
 

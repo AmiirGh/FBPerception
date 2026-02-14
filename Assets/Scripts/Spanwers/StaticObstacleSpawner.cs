@@ -42,7 +42,7 @@ public class StaticObstacleSpawner : MonoBehaviour
         float eps = Random.Range(0f, 1f);
         if (eps < sObstacleGenExactOnUvaProb)
         { // generate with the same x y as the uva
-            staticObstaclePos = new Vector3(cameraTransform.position.x, cameraTransform.position.y, cameraTransform.position.z + 25.0f);
+            staticObstaclePos = new Vector3(cameraTransform.position.x, cameraTransform.position.y+1.0f, cameraTransform.position.z + 25.0f);
         }
         else
         { // generate in random position
