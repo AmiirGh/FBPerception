@@ -23,7 +23,7 @@ public class MyGameManager : MonoBehaviour
     void Start()
     {
         experimentPhase = 0;
-        experimentType = 3; // 1 or 2 or 3 or ... or 6. Change this number before each participant starts.
+        experimentType = 1; // 1 or 2 or 3 or ... or 6. Change this number before each participant starts.
         //sObstacleGenExactOnUvaProb = 0.1f;
 
     }
@@ -151,9 +151,9 @@ public class MyGameManager : MonoBehaviour
 
     public enum sObstacleGenExactOnUvaProbs
     { // it will be devided by 1000
-        easy = 40,
-        medium = 50,
-        hard = 60,
+        easy = 50,
+        medium = 75,
+        hard = 100,
         invalid = 0
     }
 

@@ -167,6 +167,7 @@ class SimpleClient:
                             self.vib.send_vibration_data(degree, 10)
                             t = 1
                         if timestamp - self.prev_timestamp > 10 or self.isFirstTimeRecording: # a new part is started
+                            t += 1
                             self.run_audio_recorder()
 
 

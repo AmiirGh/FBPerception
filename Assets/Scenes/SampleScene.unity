@@ -841,7 +841,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   UVATransform: {fileID: 307974537}
   collisionDetector: {fileID: 1106440504}
-  scoreboardPositionOffset: {x: 0, y: 0, z: 0}
+  scoreboardPositionOffset: {x: -2.4, y: 3.55, z: 12.3}
   scoreboard: {fileID: 356315876}
 --- !u!1 &410087039
 GameObject:

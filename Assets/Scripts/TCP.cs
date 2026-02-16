@@ -227,14 +227,6 @@ public class SentData
     public int numberOfCollision;
     public string headPosition;
     public string headRotation;
-    
-    public float headPosX;
-    public float headPosY;
-    public float headPosZ;
-    public float headRotX;
-    public float headRotY;
-    public float headRotZ;
-    
     public string collisionPosition;
     public float generationRate;
     public float forwardSpeed;

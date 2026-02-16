@@ -3,7 +3,7 @@ import socket
 import time
 import numpy as np
 class VibrationClient:
-    def __init__(self, esp32_ip='172.20.10.3', port=12345):
+    def __init__(self, esp32_ip='172.20.10.2', port=12345):
         """
         Initializes the VibrationClient with a persistent connection.
         Args:
@@ -103,6 +103,10 @@ class VibrationClient:
         elif level == 1:
             if degree == 1:
                 intensity = 157
+            elif degree == 3:
+                intensity = 210
+            elif degree == 7:
+                intensity = 210
             else:
                 intensity = 200
         elif level == 80:
@@ -147,6 +151,6 @@ class VibrationClient:
 # Example Usage:
 if __name__ == "__main__":
     vibration_client = VibrationClient()
-    vibration_client.send_vibration_data(degree=1, level=1)
-    time.sleep(10)
+    vibration_client.send_vibration_data(degree=3, level=2)
+    time.sleep(2)
     vibration_client.stop_vibration() # R1, L1 increase
