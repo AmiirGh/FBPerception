@@ -190,7 +190,7 @@ class SimpleClient:
         script_dir = os.path.dirname(os.path.abspath(__file__))
         recorder_path = os.path.join(script_dir, "audio_recorder.py")
         self.experiment_phase += 1
-        process = subprocess.Popen([sys.executable, recorder_path])
+        process = subprocess.Popen([sys.executable, recorder_path, str(self.experiment_phase)])
 
     def send_dummy_data(self):
         """Send dummy data to server periodically."""
