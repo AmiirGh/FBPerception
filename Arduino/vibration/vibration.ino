@@ -1,11 +1,10 @@
 #include <WiFi.h>
 
 //const char* ssid = "RAIIS";
-const char* ssid = "Amir_Gh";
-// const char* ssid = "UT-WiFi";
-// const char* password = "11111111";
 
+const char* ssid = "Amir_Gh";
 const char* password = "amir1234";
+
 bool pinActive = false;
 unsigned long triggerTime = 0;
 // const unsigned long pulseDuration = 150;  // 150 ms pulse

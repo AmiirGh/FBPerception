@@ -12,7 +12,7 @@ public class AudioFeedback : MonoBehaviour
     [SerializeField] private DynamicObstacleSpawner dynamicObstacleSpawner;
 
     [SerializeField] private Feedbacks feedbacks;
-    SerialPort serial = new SerialPort("COM7", 9600);
+    SerialPort serial = new SerialPort("COM5", 9600);
     float timer = 0;
     private int prevTrialNumber = -1;
     private int currentTrialNumber = 0;

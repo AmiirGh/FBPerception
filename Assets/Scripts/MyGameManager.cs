@@ -18,12 +18,12 @@ public class MyGameManager : MonoBehaviour
     public float sObstacleGenExactOnPlayerProb = 0; // The probability to generate the static obstacles at the exact player x,y
     private bool isPaused = false;
 
-    private int experimentType = 0; // Experiment types are range from 1 to 6.  1: easy,medium,hard | 2: medium,easy,hard | ... | 3: hard,medium,easy
+    private int experimentType = 5; // Experiment types are range from 1 to 6.  1: easy,medium,hard | 2: medium,easy,hard | ... | 3: hard,medium,easy
 
     void Start()
     {
         experimentPhase = 0;
-        experimentType = 1; // 1 or 2 or 3 or ... or 6. Change this number before each participant starts.
+        experimentType = 6; // 1 or 2 or 3 or ... or 6. Change this number before each participant starts.
         //sObstacleGenExactOnUvaProb = 0.1f;
 
     }

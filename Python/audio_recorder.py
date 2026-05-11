@@ -19,19 +19,19 @@ def read_subject_info():
 if __name__ == "__main__":
 
 #____CHANGE THE FOLLOWING LINE ONLY___________#
-    #experiment_phase = 3
+    experiment_phase = 1
     if len(sys.argv) > 1:
         experiment_phase = int(sys.argv[1])
     else:
-        experiment_phase = 0
+        experiment_phase = 10 # invalid value
 
     print(experiment_phase)
-
     subject_name, subject_id = read_subject_info()
+
     if experiment_phase == 1:
-        duration = 10 # 72*10 + 10
+        duration = 72*10 + 10
     else: # phase 2 or 3
-        duration = 10#72*10  # for phase 1, we need 10 more seconds so that we capture the last command
+        duration = 72*10  # for phase 1, we need 10 more seconds so that we capture the last command
                           # 72 is for 72 intervals each 10 seconds
     if experiment_phase >= 1:
         record_audio(f"audio_{subject_name}_{subject_id}_{experiment_phase}.wav", duration=duration) # 12 minutes (each part of the experiment is 12 minute long)
