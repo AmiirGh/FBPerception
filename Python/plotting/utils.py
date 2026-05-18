@@ -7,6 +7,7 @@ import os
 import scipy.stats as stats
 import warnings
 warnings.filterwarnings("ignore")
+import time
 
 def get_full_df_list():
     main_dir = './data'
@@ -84,9 +85,7 @@ def get_subjects_data_full_df(subject_names, subjects_data_path):
     for s_n in subject_names:
         full_path = os.path.join(subjects_data_path, s_n, f"received_data_{s_n}.csv")
         full_data = pd.read_csv(full_path)
-        subjects_data_full[s_n] = full_path
-
-    m = subjects_data_full['AliFartoot_2080']
+        subjects_data_full[s_n] = full_data
     return subjects_data_full
 
 
@@ -685,11 +684,11 @@ def plot_accuracy_rates_by_generation_rate(datasets):
         plt.show()
 
 
-def plot_collisions_all(df_list_org):
+def plot_collisions_all(subjects_data_full):
     all_time_data = []
 
-    for df in df_list_org:
-        subject = df["subject"].iloc[0]
+    for subject_name, df in subjects_data_full.items():
+        subject = subject_name
         df_sorted = df.sort_values("timestamp").reset_index(drop=True)
         # df_sorted = df
         temp = df_sorted[["timestamp", "number_of_collision"]].copy()
@@ -712,11 +711,11 @@ def plot_collisions_all(df_list_org):
     plt.show()
 
 
-def get_collisions_by_generation_rate(df_list_org):
+def get_collisions_by_generation_rate(subjects_data_full):
     all_time_data = []
 
-    for df in df_list_org:
-        subject = df["subject"].iloc[0]
+    for subject_name, df in subjects_data_full.items():
+        subject = subject_name
         generation_rate = df["generation_rate"].iloc[0]
 
         df_sorted = df.sort_values("timestamp").reset_index(drop=True)
@@ -758,11 +757,11 @@ def plot_collisions_by_generation_rate(collisions_by_gr, all_time_df_by_gr):
 
 
 
-def calc_no_collisions_by_fbmod_for_time_window(full_df, start_sec=2, end_sec=4):
+def calc_no_collisions_by_fbmod_for_time_window(subjects_data_trials, start_sec=2, end_sec=4):
     all_results = []
 
-    for df in full_df:
-        subject = df["subject"].iloc[0]
+    for subject_name, df in subjects_data_trials.items():
+        subject = subject_name
         start_offset = int(start_sec * 12)
         end_offset = int(end_sec * 12)
         results = extract_collision_modality(df, start_offset=start_offset, end_offset=end_offset)
@@ -798,7 +797,7 @@ def no_col_by_fbmod_p_val_df(df):
     a_h_p_val = get_pairwise_p_value(a, h)
     pass
 
-def plot_mean_head_position_heatmap(df_list, bins=50):
+def plot_mean_head_position_heatmap(subjects_data_trials, bins=50):
     """
     Creates a 2D heatmap of mean head position density (x, y) across all subjects.
 
@@ -810,7 +809,7 @@ def plot_mean_head_position_heatmap(df_list, bins=50):
     all_x = []
     all_y = []
 
-    for df in df_list:
+    for subject_name, df in subjects_data_trials.items():
         # Drop NaNs just in case
         valid_positions = df["head_position"].dropna()
 
@@ -1562,3 +1561,267 @@ def apply_audio_delays(subjects_data_trials, delays_df):
         shifted_data[subject_name] = df
 
     return shifted_data
+
+
+def plot_error_collision_tradeoff(subjects_data_trials, subjects_data_full):
+    stats_list = []
+
+    for subject_name, df in subjects_data_trials.items():
+        # Skip empty dataframes if any
+        if df is None or df.empty:
+            continue
+
+        # 1. Filter out trials where perceived values are -1 (should not be counted)
+        df_filtered = df[(df['degree_perceived'] != -1) & (df['level_perceived'] != -1)]
+
+        # 2. Count errors (where actual degree/level does not match perceived degree/level)
+        # Note: perceived values of 0 (missed) naturally count as errors here
+        errors = ((df_filtered['degree'] != df_filtered['degree_perceived']) |
+                  (df_filtered['level'] != df_filtered['level_perceived'])).sum()
+
+        # 3. Get the last recorded number of collisions for the subject
+        last_collisions = df['number_of_collision'].iloc[-1]
+        # subjcet_df_full = subjects_data_full[subject_name]
+        # last_collisions = subjcet_df_full['number_of_collision'].iloc[-1]
+        # Append the metrics for this subject
+        stats_list.append({
+            'Subject': subject_name,
+            'Total Errors': errors,
+            'Total Collisions': last_collisions
+        })
+
+    # Convert summary to a DataFrame
+    df_summary = pd.DataFrame(stats_list)
+
+    if df_summary.empty:
+        print("No valid subject data available to plot.")
+        return
+
+    # 4. Plot the Scatter Plot with a Regression Line
+    plt.figure(figsize=(8, 6))
+
+    sns.regplot(
+        data=df_summary,
+        x='Total Errors',
+        y='Total Collisions',
+        scatter_kws={'s': 60, 'alpha': 0.8, 'color': '#1f77b4'},  # Customize dots
+        line_kws={'color': '#d62728', 'linewidth': 2}  # Customize regression line
+    )
+
+    # 5. Labels and Layout
+    plt.title('Dual-Task Trade-off: Perception Errors vs. Total Collisions', fontsize=14)
+    plt.xlabel('Total Errors (Degree or Level Misperceptions)', fontsize=12)
+    plt.ylabel('Total Collisions (Final Count)', fontsize=12)
+    plt.grid(True, linestyle='--', alpha=0.5)
+
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_misses_collision_tradeoff(subjects_data_trials):
+    stats_list = []
+
+    for subject_name, df in subjects_data_trials.items():
+        # Skip empty dataframes if any
+        if df is None or df.empty:
+            continue
+
+        # 1. Filter out trials where perceived values are -1 (invalid/should not be counted)
+        df_filtered = df[(df['degree_perceived'] != -1) & (df['level_perceived'] != -1)]
+
+        # 2. Count ONLY the "misses" (where perceived value is exactly 0)
+        misses = ((df_filtered['degree_perceived'] == 0) |
+                  (df_filtered['level_perceived'] == 0)).sum()
+
+        # 3. Get the last recorded number of collisions for the subject
+        last_collisions = df['number_of_collision'].iloc[-1]
+
+        # Append the metrics for this subject
+        stats_list.append({
+            'Subject': subject_name,
+            'Total Misses': misses,
+            'Total Collisions': last_collisions
+        })
+
+    # Convert summary to a DataFrame
+    df_summary = pd.DataFrame(stats_list)
+
+    if df_summary.empty:
+        print("No valid subject data available to plot.")
+        return
+
+    # 4. Plot the Scatter Plot with a Regression Line
+    plt.figure(figsize=(8, 6))
+
+    sns.regplot(
+        data=df_summary,
+        x='Total Misses',
+        y='Total Collisions',
+        scatter_kws={'s': 60, 'alpha': 0.8, 'color': '#2ca02c'},  # Greenish dots to distinguish from the previous plot
+        line_kws={'color': '#d62728', 'linewidth': 2}  # Red regression line
+    )
+
+    # 5. Labels and Layout
+    plt.title('Dual-Task Trade-off: Perception Misses vs. Total Collisions', fontsize=14)
+    plt.xlabel('Total Misses (Perceived == 0)', fontsize=12)
+    plt.ylabel('Total Collisions (Final Count)', fontsize=12)
+    plt.grid(True, linestyle='--', alpha=0.5)
+
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_tradeoff_groups_error(subjects_data_trials):
+    stats_list = []
+
+    # 1. Process each subject
+    for subject_name, df in subjects_data_trials.items():
+        if df is None or df.empty:
+            continue
+
+        # Filter valid trials
+        df_filtered = df[(df['degree_perceived'] != -1) & (df['level_perceived'] != -1)]
+
+        # Calculate errors
+        errors = ((df_filtered['degree'] != df_filtered['degree_perceived']) |
+                  (df_filtered['level'] != df_filtered['level_perceived'])).sum()
+
+        # Calculate final collisions
+        last_collisions = df['number_of_collision'].iloc[-1]
+
+        stats_list.append({
+            'Subject': subject_name,
+            'Errors': errors,
+            'Collisions': last_collisions
+        })
+
+    df_summary = pd.DataFrame(stats_list)
+
+    if df_summary.empty:
+        print("No valid data available.")
+        return
+
+    # 2. Find the mean collisions across all subjects
+    mean_collisions = df_summary['Collisions'].mean()
+    group1_label = 'Low Collisions (< Mean)'
+    group2_label = 'High Collisions (>= Mean)'
+
+    # 3. Categorize subjects into two groups
+    df_summary['Group'] = np.where(
+        df_summary['Collisions'] < mean_collisions,
+        group1_label,
+        group2_label
+    )
+
+    errors_group1 = df_summary[df_summary['Group'] == group1_label]['Errors']
+    errors_group2 = df_summary[df_summary['Group'] == group2_label]['Errors']
+    p_val = get_pairwise_p_value(errors_group1, errors_group2)
+
+    # 4. Reshape data (melt) so seaborn can plot 4 distinct bars (2 groups x 2 metrics)
+    df_melted = df_summary.melt(
+        id_vars=['Subject', 'Group'],
+        value_vars=['Collisions', 'Errors'],
+        var_name='Metric',
+        value_name='Count'
+    )
+
+    # 5. Create the grouped bar chart
+    plt.figure(figsize=(10, 6))
+
+    # Seaborn barplot automatically computes the average for the group
+    # and adds confidence interval error bars.
+    sns.barplot(
+        data=df_melted,
+        x='Group',
+        y='Count',
+        hue='Metric',
+        palette='Set2',
+        capsize=0.1  # Adds the "T" caps to the confidence bounds
+    )
+
+    # 6. Customize aesthetics
+    plt.title('Dual-Task Trade-off: Performance by Collision Groups', fontsize=14)
+    plt.xlabel(f'Subject Group (Mean Collisions = {mean_collisions:.1f})', fontsize=12)
+    plt.ylabel('Average Count', fontsize=12)
+    plt.legend(title='Metric', bbox_to_anchor=(1.05, 1), loc='upper left')
+
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_tradeoff_groups_misses(subjects_data_trials):
+    stats_list = []
+
+    # 1. Process each subject
+    for subject_name, df in subjects_data_trials.items():
+        if df is None or df.empty:
+            continue
+
+        # Filter valid trials (ignore -1)
+        df_filtered = df[(df['degree_perceived'] != -1) & (df['level_perceived'] != -1)]
+
+        # Calculate Misses (where degree or level is exactly 0)
+        misses = ((df_filtered['degree_perceived'] == 0) |
+                  (df_filtered['level_perceived'] == 0)).sum()
+
+        # Calculate final collisions
+        last_collisions = df['number_of_collision'].iloc[-1]
+
+        stats_list.append({
+            'Subject': subject_name,
+            'Misses': misses,
+            'Collisions': last_collisions
+        })
+
+    df_summary = pd.DataFrame(stats_list)
+
+    if df_summary.empty:
+        print("No valid data available.")
+        return
+
+    # 2. Find the mean collisions across all subjects
+    mean_collisions = df_summary['Collisions'].mean()
+    group1_label = 'Low Collisions (< Mean)'
+    group2_label = 'High Collisions (>= Mean)'
+
+    # 3. Categorize subjects into two groups
+    df_summary['Group'] = np.where(
+        df_summary['Collisions'] < mean_collisions,
+        group1_label,
+        group2_label
+    )
+
+    misses_group1 = df_summary[df_summary['Group'] == group1_label]['Misses']
+    misses_group2 = df_summary[df_summary['Group'] == group2_label]['Misses']
+    p_val = get_pairwise_p_value(misses_group1, misses_group2)
+
+    # 4. Reshape data (melt) to plot 4 bars (2 groups x 2 metrics: Collisions and Misses)
+    df_melted = df_summary.melt(
+        id_vars=['Subject', 'Group'],
+        value_vars=['Collisions', 'Misses'],  # Changed 'Errors' to 'Misses'
+        var_name='Metric',
+        value_name='Count'
+    )
+
+    # 5. Create the grouped bar chart
+    plt.figure(figsize=(10, 6))
+
+    sns.barplot(
+        data=df_melted,
+        x='Group',
+        y='Count',
+        hue='Metric',
+        palette='Set2',
+        capsize=0.1  # Adds the "T" caps to the confidence bounds
+    )
+
+    # 6. Customize aesthetics
+    plt.title('Dual-Task Trade-off: Performance (Misses) by Collision Groups', fontsize=14)
+    plt.xlabel(f'Subject Group (Mean Collisions = {mean_collisions:.1f})', fontsize=12)
+    plt.ylabel('Average Count', fontsize=12)
+    plt.legend(title='Metric', bbox_to_anchor=(1.05, 1), loc='upper left')
+
+    plt.tight_layout()
+    plt.show()
+
+
