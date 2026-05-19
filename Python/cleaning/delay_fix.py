@@ -37,7 +37,7 @@ def clean(folder_dir, subject_namee):
 
             st = f'{folder_dir}/{subject_name}/{subject_name}_cleaned.xlsx'
             df_trials.to_excel(st)
-        print('Subject misses: ', len(df_trials[df_trials['degree_perceived'] == 9999]))
+        print('Subject misses: ', len(df_trials[df_trials['degree_perceived'] == 0]))
         print('Setup misses: ', len(df_trials[df_trials['degree_perceived'] == -1]))
 
         print("\n===================================================\n")
@@ -75,10 +75,11 @@ if __name__ == '__main__':
                         'Amirhossein_9951', 'Yegane_2669', 'Matin_1453', 'Navid_4966', 'Saba_2541', 'Tina_4890',
                         'Alireza_4326', 'Ebram_9796', 'MohammadHossein_7311', 'Mehrsa_8611', 'Shahla_6430',
                         'Hossein_8754', 'MohammadMash_317', 'Zahra_3701', 'Sepideh_6913', 'Yegane_5688', 'Saber_1648',
-                        'Samar_1783',  'Shahab_2645', 'Hossein_1501', 'Asra_9174']
+                        'Samar_1783',  'Shahab_2645', 'Hossein_1501', 'Asra_9174', 'Asal_6565', 'Fatemeh_5992',
+                        'Yas_4358']
 
-    not_cleaned_subjects = ['Yas_4358', 'Fatemeh_5992']
-    single_subject_mode = ['Asal_6565',]
+    not_cleaned_subjects = []
+    single_subject_mode = []
 
     # remove_all_cleaned_from(s1_j_c1, 's1-j-c1')
     # remove_all_cleaned_from(cleaned_subjects, 's1-s2-j')
@@ -89,7 +90,7 @@ if __name__ == '__main__':
         i += 1
 
 
-    # print(f'from {len(cleaned_subjects)} subjects, cleaned {i}')
-    # print(f'Remaining {len(not_cleaned_subjects)} subjects')
+    print(f'from {len(cleaned_subjects)} subjects, cleaned {i}')
+    print(f'Remaining {len(not_cleaned_subjects)} subjects')
 
 

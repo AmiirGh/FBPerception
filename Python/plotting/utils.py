@@ -102,19 +102,18 @@ def get_df_list(csv_files, file_path):
     return df_list
 
 
-def extract_collision_modality(df, start_offset=24, end_offset=48):
+def extract_collision_modality(df, trials_df, start_offset=24, end_offset=48):
     """
-    Extract collisions in a time window AFTER rising edge:
-    [start_offset, end_offset] in samples
+    Extract collisions in a time window AFTER rising edge,
+    ignoring trials where the subject missed (degree_perceived == 0).
     """
-
     df = df.copy().reset_index(drop=True)
 
     df["is_dynamic_obstacle_present"] = df["is_dynamic_obstacle_present"].astype(bool)
 
     df["dynamic_rise"] = (
-        df["is_dynamic_obstacle_present"] &
-        ~df["is_dynamic_obstacle_present"].shift(1, fill_value=False)
+            df["is_dynamic_obstacle_present"] &
+            ~df["is_dynamic_obstacle_present"].shift(1, fill_value=False)
     )
 
     df.loc[df["dynamic_rise"], "feedback_modality"] = (
@@ -126,6 +125,22 @@ def extract_collision_modality(df, start_offset=24, end_offset=48):
     collision_results = []
 
     for idx in trials.index:
+        # 1. Identify which trial this is in the continuous data
+        current_trial_num = df.loc[idx, "trial_number"]
+
+        # 2. Look up this exact trial in the subjects_data_trials dataframe
+        matching_trial = trials_df[trials_df["trial_number"] == current_trial_num]
+
+        # 3. Check if the trial was missed
+        if not matching_trial.empty:
+            deg_perceived = matching_trial["degree_perceived"].iloc[0]
+            if deg_perceived == 0 or deg_perceived == -1:
+                continue
+        else:
+            # If for some reason the trial isn't in the trials_df, skip it to be safe
+            continue
+
+        # --- Proceed with collision calculation if not missed ---
         start_idx = idx + start_offset
         end_idx = min(idx + end_offset, len(df) - 1)
 
@@ -756,21 +771,128 @@ def plot_collisions_by_generation_rate(collisions_by_gr, all_time_df_by_gr):
     plt.show()
 
 
-
-def calc_no_collisions_by_fbmod_for_time_window(subjects_data_trials, start_sec=2, end_sec=4):
+def calc_no_collisions_by_fbmod_for_time_window(subjects_data_full, subjects_data_trials, start_sec, end_sec):
     all_results = []
 
-    for subject_name, df in subjects_data_trials.items():
-        subject = subject_name
+    for subject_name, df in subjects_data_full.items():
+        # Safety check: Ensure we have the trial data for this subject
+        if subject_name not in subjects_data_trials or subjects_data_trials[subject_name] is None:
+            continue
+
+        trials_df = subjects_data_trials[subject_name]
+
         start_offset = int(start_sec * 12)
         end_offset = int(end_sec * 12)
-        results = extract_collision_modality(df, start_offset=start_offset, end_offset=end_offset)
+
+        # Pass the trials_df down to the extraction function
+        results = extract_collision_modality(df, trials_df, start_offset=start_offset, end_offset=end_offset)
+
+        # If the results are empty (e.g., all trials were missed), skip
+        if results.empty:
+            continue
+
         summary = (results.groupby("feedback_modality")["collisions"].sum().reset_index())
-        summary["subject"] = subject
+        summary["subject"] = subject_name
         all_results.append(summary)
+
+    if not all_results:
+        return pd.DataFrame()  # Return empty df if nothing matched
 
     all_summary = pd.concat(all_results, ignore_index=True)
     return all_summary
+
+
+def plot_collision_time_windows(all_summary_0_2, all_summary_2_4, window_1, window_2):
+    """
+    Plots sequential box plots for Audio, Haptic, and Visual collisions
+    across 0-2s and 2-4s, grouped by Modality color (Set2).
+    """
+    # 1. Make copies and label the time windows
+    df1 = all_summary_0_2.copy()
+    df2 = all_summary_2_4.copy()
+
+    df1['Time Window'] = f'{window_1[0]}-{window_1[1]}s'
+    df2['Time Window'] = f'{window_2[0]}-{window_2[1]}s'
+
+    # 2. Combine the dataframes
+    combined_df = pd.concat([df1, df2], ignore_index=True)
+
+    # 3. Create a unified X-axis category combining Modality and Time
+    # This allows us to map the color strictly to Modality while keeping all 6 boxes separate
+    combined_df['Category'] = combined_df['feedback_modality'] + '\n' + combined_df['Time Window']
+
+    # 4. Define the exact sequential order you requested
+    order = [
+        f'audio\n{window_1[0]}-{window_1[1]}s', f'audio\n{window_2[0]}-{window_2[1]}s',
+        f'haptic\n{window_1[0]}-{window_1[1]}s', f'haptic\n{window_2[0]}-{window_2[1]}s',
+        f'visual\n{window_1[0]}-{window_1[1]}s', f'visual\n{window_2[0]}-{window_2[1]}s'
+    ]
+
+    # 5. Create the Plot
+    plt.figure(figsize=(10, 6))
+
+    sns.boxplot(
+        data=combined_df,
+        x='Category',
+        y='collisions',
+        hue='feedback_modality',  # Forces the color to be tied to the modality
+        order=order,
+        palette='Set2',  # Applying the Set2 palette
+        dodge=False,  # No dodging needed since each X-tick only has 1 box
+        width=0.6,
+        showfliers=False
+    )
+
+    # 6. Customize Aesthetics
+    plt.title(f'Collisions by Feedback Modality ({window_1[0]}-{window_1[1]}s vs {window_2[0]}-{window_2[1]}ss)', fontsize=14)
+    plt.xlabel('Feedback Modality & Time Window', fontsize=12)
+    plt.ylabel('Number of Collisions', fontsize=12)
+    plt.legend(title='Feedback Modality', bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+
+    plt.tight_layout()
+    plt.show()
+
+
+def compare_time_windows_significance(all_summary_0_2, all_summary_2_4):
+    """
+    Calculates the p-value for the difference in collisions between
+    the 0-2s and 2-4s time windows for each feedback modality.
+    """
+    modalities = ['audio', 'haptic', 'visual']
+    p_values = {}
+
+    print("=" * 45)
+    print(" STATISTICAL SIGNIFICANCE (0-2s vs 2-4s)")
+    print("=" * 45)
+
+    for mod in modalities:
+        # 1. Extract the collision counts for the current modality in the 0-2s window
+        data_0_2 = all_summary_0_2[all_summary_0_2['feedback_modality'] == mod]['collisions']
+
+        # 2. Extract the collision counts for the current modality in the 2-4s window
+        data_2_4 = all_summary_2_4[all_summary_2_4['feedback_modality'] == mod]['collisions']
+
+        # 3. Use your custom function to calculate the p-value
+        p_val = get_pairwise_p_value(data_0_2, data_2_4)
+
+        # 4. Store the result
+        p_values[mod] = p_val
+
+        # 5. Format a nice print output with significance stars
+        if p_val < 0.001:
+            sig = "*** (Highly Significant)"
+        elif p_val < 0.01:
+            sig = "** (Very Significant)"
+        elif p_val < 0.05:
+            sig = "* (Significant)"
+        else:
+            sig = "ns (Not Significant)"
+
+        print(f"{mod.upper():<8} Modality | p-value: {p_val:.4f} {sig}")
+
+    print("=" * 45)
+    return p_values
 
 
 def plot_no_collisions_by_fbmod_for_time_window(all_summary, start_sec, end_sec):
@@ -1104,9 +1226,8 @@ def compute_error_by_modality(subjects_data_trials):
     deg_cols = [f"deg_err_{i}" for i in range(5)]
     deg_weights = np.array(range(5))
 
-    overall_results['weighted_mean_deg_err'] = (
-                                                       overall_results[deg_cols].values @ deg_weights
-                                               ) / overall_results[deg_cols].sum(axis=1)
+    overall_results['weighted_mean_deg_err'] = ((overall_results[deg_cols].values @ deg_weights)
+                                                / overall_results[deg_cols].sum(axis=1))
 
     # Weighted mean level error
     lvl_cols = [f"lvl_err_{i}" for i in range(3)]
@@ -1117,6 +1238,92 @@ def compute_error_by_modality(subjects_data_trials):
                                                ) / overall_results[lvl_cols].sum(axis=1)
 
     return overall_results, subject_distributions
+
+
+def evaluate_outliers_performance(outlier_names, subject_distributions):
+    """
+    Compares the audio and haptic performance of specific outlier subjects
+    against the rest of the population.
+    """
+    # 1. Filter for only audio and haptic modalities
+    df_filtered = subject_distributions[
+        subject_distributions['feedback_modality'].isin(['audio', 'haptic'])
+    ].copy()
+
+    # 2. Assign subjects to either 'Outliers' or 'Population'
+    df_filtered['Group'] = np.where(
+        df_filtered['subject_id'].isin(outlier_names),
+        'Outliers',
+        'Population'
+    )
+
+    # 3. Aggregate the error counts for both groups
+    # Drop subject_id so we just sum up the error counts per Group and Modality
+    group_sums = df_filtered.drop(columns=['subject_id']).groupby(['Group', 'feedback_modality']).sum().reset_index()
+
+    # 4. Calculate weighted mean degree error
+    deg_cols = [f"deg_err_{i}" for i in range(5)]
+    deg_weights = np.array(range(5))
+
+    # Avoid division by zero if a group has no data
+    deg_totals = group_sums[deg_cols].sum(axis=1)
+    group_sums['mean_deg_err'] = np.where(
+        deg_totals > 0,
+        (group_sums[deg_cols].values @ deg_weights) / deg_totals,
+        np.nan
+    )
+
+    # 5. Calculate weighted mean level error
+    lvl_cols = [f"lvl_err_{i}" for i in range(3)]
+    lvl_weights = np.array(range(3))
+
+    lvl_totals = group_sums[lvl_cols].sum(axis=1)
+    group_sums['mean_lvl_err'] = np.where(
+        lvl_totals > 0,
+        (group_sums[lvl_cols].values @ lvl_weights) / lvl_totals,
+        np.nan
+    )
+
+    results = group_sums[['Group', 'feedback_modality', 'mean_deg_err', 'mean_lvl_err']]
+
+    # 6. Print the Comparison
+    print("=" * 60)
+    print(" OUTLIERS VS POPULATION PERFORMANCE (AUDIO & HAPTIC)")
+    print("=" * 60)
+
+    for mod in ['audio', 'haptic']:
+        print(f"\n--- {mod.upper()} MODALITY ---")
+
+        # Safely extract values
+        try:
+            outlier_deg = \
+            results[(results['Group'] == 'Outliers') & (results['feedback_modality'] == mod)]['mean_deg_err'].values[0]
+            pop_deg = \
+            results[(results['Group'] == 'Population') & (results['feedback_modality'] == mod)]['mean_deg_err'].values[
+                0]
+
+            outlier_lvl = \
+            results[(results['Group'] == 'Outliers') & (results['feedback_modality'] == mod)]['mean_lvl_err'].values[0]
+            pop_lvl = \
+            results[(results['Group'] == 'Population') & (results['feedback_modality'] == mod)]['mean_lvl_err'].values[
+                0]
+
+            # Print Degree Error Comparison
+            deg_status = "BETTER (Less Error)" if outlier_deg < pop_deg else "WORSE (More Error)"
+            print(
+                f"Degree Error : Outliers = {outlier_deg:.3f} | Population = {pop_deg:.3f}  --> Outliers are {deg_status}")
+
+            # Print Level Error Comparison
+            lvl_status = "BETTER (Less Error)" if outlier_lvl < pop_lvl else "WORSE (More Error)"
+            print(
+                f"Level Error  : Outliers = {outlier_lvl:.3f} | Population = {pop_lvl:.3f}  --> Outliers are {lvl_status}")
+
+        except IndexError:
+            print("Not enough data to compare for this modality.")
+
+    print("\n" + "=" * 60)
+    return results
+
 
 
 def plot_error_bars(results):
@@ -1823,5 +2030,93 @@ def plot_tradeoff_groups_misses(subjects_data_trials):
 
     plt.tight_layout()
     plt.show()
+
+
+def plot_deg_lvl_position_misses_boxplot(subjects_data_trials, fb_mod):
+    records = []
+
+    # 1. Iterate through every subject
+    for subject_name, df in subjects_data_trials.items():
+        if df is None or df.empty:
+            continue
+
+        # 2. Filter for purely visual feedback and exclude invalid (-1) responses
+        df_vis = df[(df['feedback_modality'] == fb_mod) &
+                    (df['degree_perceived'] != -1) &
+                    (df['level_perceived'] != -1)].copy()
+
+        # 3. Create a boolean mask for misses (0 in degree or level)
+        df_vis['is_miss'] = (df_vis['degree_perceived'] == 0) | (df_vis['level_perceived'] == 0)
+        t = df_vis['is_miss'].sum()
+        # 4. Group and sum the misses by degree and level for this specific subject
+        deg_misses = df_vis.groupby('degree')['is_miss'].sum().to_dict()
+        lvl_misses = df_vis.groupby('level')['is_miss'].sum().to_dict()
+
+        # 5. Store the 8 Degree counts (ensuring 0 is recorded if they had no misses)
+        for d in range(1, 9):
+            records.append({
+                'Subject': subject_name,
+                'Type': 'Degree',
+                'Factor': f'Deg {d}',
+                'Misses': deg_misses.get(d, 0)
+            })
+
+        # 6. Store the 3 Level counts
+        for l in range(1, 4):
+            records.append({
+                'Subject': subject_name,
+                'Type': 'Level',
+                'Factor': f'Lev {l}',
+                'Misses': lvl_misses.get(l, 0)
+            })
+
+    df_plot = pd.DataFrame(records)
+
+    plt.figure(figsize=(12, 6))
+
+    order = [f'Deg {d}' for d in range(1, 9)] + [f'Lev {l}' for l in range(1, 4)]
+
+    # Generate the 11 Box Plots
+    sns.boxplot(
+        data=df_plot,
+        x='Factor',
+        y='Misses',
+        hue='Type',
+        order=order,
+        dodge=False,  # Prevents the boxes from offsetting horizontally
+        palette='Paired',  # Uses your preferred palette style
+        width=0.6  # Adjust box width for clarity
+    )
+
+    # 8. Customize Aesthetics
+    plt.title(f'Distribution of {fb_mod} Misses across Degrees (1-8) and Levels (1-3)', fontsize=14)
+    plt.xlabel('Spatial Factors (Degrees & Levels)', fontsize=12)
+    plt.ylabel(f'Number of {fb_mod} Misses per Subject', fontsize=12)
+    plt.legend(title='Factor Type', loc='upper right')
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+
+    plt.tight_layout()
+    plt.show()
+
+
+def print_subjects_with_high_specific_mod_misses(subjects_data_trials, fb_mod):
+    print(f"Subjects with >3 {fb_mod} Misses at Degree 3:")
+    print("-" * 45)
+
+
+    for subject_name, df in subjects_data_trials.items():
+
+        df_filtered = df[(df['feedback_modality'] == {fb_mod}) &
+                         (df['degree'] == 3) &
+                         (df['degree_perceived'] != -1) &
+                         (df['level_perceived'] != -1)]
+
+        # 2. Count the misses (where perceived degree or level is 0)
+        miss_count = ((df_filtered['degree_perceived'] == 0) |
+                      (df_filtered['level_perceived'] == 0)).sum()
+
+        if miss_count > 3:
+            print(f"• {subject_name} (Total misses: {miss_count})")
+            found_any = True
 
 

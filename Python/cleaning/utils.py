@@ -185,11 +185,11 @@ def find_anomaly(
 
 
             corrected_values.append({
-                'degree': 9999,
-                'level': 999,
+                'degree': 0,
+                'level': 0,
                 'start_ms': 0,
                 'end_ms': 0,
-                'text': '9999 9999'
+                'text': '0 0'
             })
 
         # ====================================================
