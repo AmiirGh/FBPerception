@@ -8,6 +8,7 @@ import scipy.stats as stats
 import warnings
 warnings.filterwarnings("ignore")
 import time
+from scipy.interpolate import make_interp_spline
 
 def get_full_df_list():
     main_dir = './data'
@@ -194,7 +195,7 @@ def plot_all_miss_counts(all_miss_counts):
     sns.boxplot(data=all_miss_counts, x='feedback_modality', y='count', palette="Set2", ax=ax)
 
     # Stripplot to show individual subject data points
-    sns.stripplot(data=all_miss_counts, x="feedback_modality", y="count", color="black", alpha=0.5, ax=ax)
+    # sns.stripplot(data=all_miss_counts, x="feedback_modality", y="count", color="black", alpha=0.5, ax=ax)
 
     # Labels and Titles
     ax.set_xlabel('Feedback Modality')
@@ -228,7 +229,8 @@ def get_p_val_miss_counts(df):
 
 def get_pairwise_p_value(data1, data2):
     if is_normal(data1) and is_normal(data2):
-        stat, p_val = stats.ttest_ind(data1, data2)
+        # stat, p_val = stats.ttest_ind(data1, data2)
+        stat, p_val = stats.mannwhitneyu(data1, data2)
     else:
         stat, p_val = stats.mannwhitneyu(data1, data2)
     return p_val
@@ -383,31 +385,35 @@ def plot_all_miss_counts_by_generation_rate(miss_rates_by_gr, all_miss_counts_df
         axes = [axes]
 
     modality_order = ['audio', 'haptic', 'visual']
-
+    m=0
     for i, (ax, rate) in enumerate(zip(axes, miss_rates_by_gr)):
         df_rate = all_miss_counts_df[all_miss_counts_df["generation_rate"] == rate]
-
+        m+=1
         sns.boxplot(
             data=df_rate,
             x='feedback_modality',
             y='count',
             order=modality_order,
             palette="Set2",
-            ax=ax
+            ax=ax,
+            showfliers=False
         )
 
-        sns.stripplot(
-            data=df_rate,
-            x='feedback_modality',
-            y='count',
-            order=modality_order,
-            color='black',
-            alpha=0.5,
-            ax=ax
-        )
+        # sns.stripplot(
+        #     data=df_rate,
+        #     x='feedback_modality',
+        #     y='count',
+        #     order=modality_order,
+        #     color='black',
+        #     alpha=0.5,
+        #     ax=ax,
+        # )
 
         # Titles and Labels
-        ax.set_title(f"Generation Rate: {rate}")
+        if rate == 15: difficulty = 'easy'
+        elif rate == 20: difficulty = 'medium'
+        else:            difficulty = 'hard'
+        ax.set_title(f"Difficulty: {difficulty}")
         ax.set_xlabel('Feedback Modality')
         ax.yaxis.set_major_locator(mtick.MaxNLocator(integer=True))
 
@@ -451,36 +457,31 @@ def get_accuracy_rates(subjects_data_trials):
 
         trials = df.copy()
 
+        # --- NEW CODE: Filter out invalid data ---
+        # Convert to numeric safely to catch both int 0 and string "0", then filter
+        numeric_perceived = pd.to_numeric(trials["degree_perceived"], errors="coerce")
+        trials = trials[~numeric_perceived.isin([0, -1])]
+
+        # If the dataframe is empty after filtering out 0s, skip to the next subject
+        if trials.empty:
+            continue
+        # -----------------------------------------
+
         trials["accuracy_degree"] = trials.apply(is_accuracy_degree, axis=1)
         trials["accuracy_level"] = trials.apply(is_accuracy_level, axis=1)
         trials["accuracy_full"] = trials["accuracy_degree"] & trials["accuracy_level"]
 
-        sr = (
-            trials
-            .groupby("feedback_modality")["accuracy_degree"]
-            .mean()
-            .reset_index()
-        )
+        sr = (trials.groupby("feedback_modality")["accuracy_degree"].mean().reset_index())
         sr["accuracy_degree"] *= 100
         sr["subject"] = subject_name
         all_accuracy_degree.append(sr)
 
-        sl = (
-            trials
-            .groupby("feedback_modality")["accuracy_level"]
-            .mean()
-            .reset_index()
-        )
+        sl = (trials.groupby("feedback_modality")["accuracy_level"].mean().reset_index())
         sl["accuracy_level"] *= 100
         sl["subject"] = subject_name
         all_accuracy_level.append(sl)
 
-        sf = (
-            trials
-            .groupby("feedback_modality")["accuracy_full"]
-            .mean()
-            .reset_index()
-        )
+        sf = (trials.groupby("feedback_modality")["accuracy_full"].mean().reset_index())
         sf["accuracy_full"] *= 100
         sf["subject"] = subject_name
         all_accuracy_full.append(sf)
@@ -506,7 +507,7 @@ def plot_all_accuracy_rates(datasets):
     sns.set_theme(style="whitegrid")
 
     # Create subplots
-    fig, axes = plt.subplots(1, 3, figsize=(18, 5), sharey=True)
+    fig, axes = plt.subplots(1, 3, figsize=(18, 6), sharey=True)
 
     # Enforce a consistent order across all subplots so the bars don't jump around
     modality_order = ['audio', 'haptic', 'visual']
@@ -524,25 +525,14 @@ def plot_all_accuracy_rates(datasets):
             y=y_col,
             order=modality_order,
             palette="Set2",
-            ax=ax
+            ax=ax,
+            showfliers=False
         )
 
-        # Overlay individual data points for transparency
-        sns.stripplot(
-            data=data,
-            x="feedback_modality",
-            y=y_col,
-            order=modality_order,
-            color="black",
-            alpha=0.5,
-            ax=ax
-        )
 
-        # Titles and limits
         ax.set_title(y_title)
         ax.set_xlabel("Feedback Modality")
 
-        # Set upper limit slightly above 100 so dots exactly on 100 aren't cut in half
         ax.set_ylim(0, 105)
 
         # Clean up the Y-axis labels since they are shared
@@ -665,19 +655,19 @@ def plot_accuracy_rates_by_generation_rate(datasets):
                 y=y_col,
                 order=modality_order,
                 palette="Set2",
-                ax=ax
+                ax=ax,
             )
 
             # Overlay individual data points for transparency
-            sns.stripplot(
-                data=data_gr,
-                x="feedback_modality",
-                y=y_col,
-                order=modality_order,
-                color="black",
-                alpha=0.5,
-                ax=ax
-            )
+            # sns.stripplot(
+            #     data=data_gr,
+            #     x="feedback_modality",
+            #     y=y_col,
+            #     order=modality_order,
+            #     color="black",
+            #     alpha=0.5,
+            #     ax=ax
+            # )
 
             # Titles and limits
             ax.set_title(y_title)
@@ -726,51 +716,178 @@ def plot_collisions_all(subjects_data_full):
     plt.show()
 
 
-def get_collisions_by_generation_rate(subjects_data_full):
-    all_time_data = []
+def plot_collisions_over_time_by_difficulty(subjects_data_full):
+    records = []
 
-    for subject_name, df in subjects_data_full.items():
-        subject = subject_name
-        generation_rate = df["generation_rate"].iloc[0]
+    diff_map = {15: 'Easy (Rate: 15)', 20: 'Medium (Rate: 20)', 25: 'Hard (Rate: 25)'}
 
-        df_sorted = df.sort_values("timestamp").reset_index(drop=True)
+    for subject, df in subjects_data_full.items():
+        if df is None or df.empty:
+            continue
 
-        temp = df_sorted[["timestamp", "number_of_collision"]].copy()
-        temp["time_step"] = temp.index
-        temp["subject"] = subject
-        temp["generation_rate"] = generation_rate
+        for rate, label in diff_map.items():
+            block_df = df[df['generation_rate'] == rate].copy()
 
-        all_time_data.append(temp)
+            if block_df.empty:
+                continue
 
-    all_time_df = pd.concat(all_time_data, ignore_index=True)
-    rates = sorted(all_time_df["generation_rate"].unique())
-    return rates, all_time_df
+            # Normalize time to start at 0
+            start_time = block_df['timestamp'].iloc[0]
+            block_df['relative_time_sec'] = block_df['timestamp'] - start_time
 
+            # Keep only the first 720 seconds
+            block_df = block_df[block_df['relative_time_sec'] <= 720]
 
-def plot_collisions_by_generation_rate(collisions_by_gr, all_time_df_by_gr):
-    plt.figure(figsize=(12, 6)) # Adjusted figure size for a single plot
+            # --- Normalize Collisions to start at 0 ---
+            start_collision = block_df['number_of_collision'].iloc[0]
+            block_df['phase_cum_collisions'] = block_df['number_of_collision'] - start_collision
 
-    # Use seaborn's lineplot directly with hue for generation_rate
+            # Round time to nearest integer
+            block_df['time_rounded'] = block_df['relative_time_sec'].round().astype(int)
+
+            # Group by the rounded second, taking the maximum cumulative value reached in that second
+            grouped = block_df.groupby('time_rounded')['phase_cum_collisions'].max().to_dict()
+
+            for t_sec, cum_val in grouped.items():
+                records.append({
+                    'Subject': subject,
+                    'Difficulty': label,
+                    'Time (s)': t_sec,
+                    'Cumulative Collisions': cum_val
+                })
+
+    df_plot = pd.DataFrame(records)
+    if df_plot.empty:
+        return
+
+    plt.figure(figsize=(12, 7))
+
+    order = ['Easy (Rate: 15)', 'Medium (Rate: 20)', 'Hard (Rate: 25)']
     custom_palette = ["green", "blue", "red"]
 
     sns.lineplot(
-        data=all_time_df_by_gr,
-        x="time_step",
-        y="number_of_collision",
-        hue="generation_rate",
-        errorbar="ci",
-        palette=custom_palette  # Use your custom palette here
+        data=df_plot,
+        x='Time (s)',
+        y='Cumulative Collisions',
+        hue='Difficulty',
+        hue_order=order,
+        palette=custom_palette,
+        linewidth=2.5
     )
 
-    plt.title("Cumulative Number of Collisions Over Time by Generation Rate")
-    plt.xlabel("Time Step")
-    plt.ylabel("Cumulative Number of Collisions")
-    plt.grid(True)
-    plt.legend(title="Generation Rate")
+    plt.title('Cumulative Collisions Over Time by Difficulty (Max 720s)', fontsize=15, fontweight='bold')
+    plt.xlabel('Time Spent in Difficulty Phase (Seconds)', fontsize=13)
+    plt.ylabel('Cumulative Number of Collisions', fontsize=13)
+
+    plt.xlim(0, 720)
+    plt.grid(True, linestyle='--', alpha=0.6)
+    plt.legend(title='Difficulty Level', fontsize=11, title_fontsize=12, loc='upper left')
+
     plt.tight_layout()
     plt.show()
 
 
+# Mock data test
+np.random.seed(42)
+mock_dict = {}
+for i in range(15):  # 15 mock subjects
+    df_list = []
+    current_collisions = np.random.randint(0, 50)  # Some random starting point from previous phases
+
+    for rate, duration in zip([15, 20, 25], [600, 750, 700]):
+        time_array = np.arange(0, duration, 0.5) + np.random.uniform(0, 1000)
+
+        # Determine accumulation rate based on difficulty
+        rate_lambda = 0.02 if rate == 15 else (0.05 if rate == 20 else 0.1)
+        increments = np.random.poisson(rate_lambda, len(time_array))
+
+        collisions = current_collisions + increments.cumsum()
+        current_collisions = collisions[-1]
+
+        phase_df = pd.DataFrame({
+            'timestamp': time_array,
+            'generation_rate': rate,
+            'number_of_collision': collisions
+        })
+        df_list.append(phase_df)
+
+    mock_dict[f'Sub_{i}'] = pd.concat(df_list, ignore_index=True)
+
+
+def plot_collisions_by_difficulty(subjects_data_full):
+    records = []
+
+    # Map the generation rate to your difficulty labels
+    diff_map = {15: 'Easy (Rate: 15)', 20: 'Medium (Rate: 20)', 25: 'Hard (Rate: 25)'}
+
+    for subject, df in subjects_data_full.items():
+        if df is None or df.empty:
+            continue
+
+        df_copy = df.copy()
+
+        # Calculate the exact number of collisions that happened per row
+        # (Taking the difference of the cumulative count tells us when a new collision occurred)
+        df_copy['collision_inc'] = df_copy['number_of_collision'].diff().fillna(0)
+
+        # Filter to only positive increments (in case of game resets)
+        df_copy['collision_inc'] = df_copy['collision_inc'].apply(lambda x: x if x > 0 else 0)
+
+        # Sum these increments grouped by the generation rate
+        grouped = df_copy.groupby('generation_rate')['collision_inc'].sum().to_dict()
+
+        # Append to our plotting records
+        for rate, label in diff_map.items():
+            if rate in grouped:
+                records.append({
+                    'Subject': subject,
+                    'Difficulty': label,
+                    'Collisions': grouped[rate]
+                })
+
+    df_plot = pd.DataFrame(records)
+    if df_plot.empty:
+        print("No valid data available to plot.")
+        return
+
+    plt.figure(figsize=(9, 6))
+
+    # 1. Define order and your custom palette
+    order = ['Easy (Rate: 15)', 'Medium (Rate: 20)', 'Hard (Rate: 25)']
+    custom_palette = ["green", "blue", "red"]
+
+    # 2. Draw the Boxplot
+    sns.boxplot(
+        data=df_plot,
+        x='Difficulty',
+        y='Collisions',
+        order=order,
+        palette=custom_palette,
+        width=0.5,
+        showfliers=False  # We hide outliers here so the stripplot can handle them clearly
+    )
+
+    # 3. Overlay the individual subjects' data points (optional but highly recommended!)
+    # This allows you to see the exact spread of your 50+ subjects
+    sns.stripplot(
+        data=df_plot,
+        x='Difficulty',
+        y='Collisions',
+        order=order,
+        color='black',
+        alpha=0.6,
+        jitter=True,
+        size=5
+    )
+
+    # 4. Customize Aesthetics
+    plt.title('Total Collisions by Difficulty Level', fontsize=14, fontweight='bold')
+    plt.xlabel('Difficulty (Generation Rate)', fontsize=12)
+    plt.ylabel('Total Number of Collisions', fontsize=12)
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+
+    plt.tight_layout()
+    plt.show()
 def calc_no_collisions_by_fbmod_for_time_window(subjects_data_full, subjects_data_trials, start_sec, end_sec):
     all_results = []
 
@@ -850,6 +967,99 @@ def plot_collision_time_windows(all_summary_0_2, all_summary_2_4, window_1, wind
     plt.legend(title='Feedback Modality', bbox_to_anchor=(1.05, 1), loc='upper left')
     plt.grid(axis='y', linestyle='--', alpha=0.7)
 
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_multiple_collision_time_windows(windows_list, subjects_data_full, subjects_data_trials):
+    """
+    Plots stacked box plots (3 rows, 1 column) for Audio, Haptic, and Visual
+    collisions across time windows, with smooth mean curves overlaid.
+    """
+    # 2. Run the calculation in a loop and combine the results
+    window_summaries = []
+    for w in windows_list:
+        # Calculate for the specific window
+        summary_df = calc_no_collisions_by_fbmod_for_time_window(
+            subjects_data_full,
+            subjects_data_trials,
+            start_sec=w[0],
+            end_sec=w[1]
+        )
+
+        # Tag the dataframe with its specific time window
+        summary_df['Time Window'] = f'{w[0]}-{w[1]}s'
+        window_summaries.append(summary_df)
+
+    # Combine all 5 windows into one large dataframe
+    combined_all_windows = pd.concat(window_summaries, ignore_index=True)
+
+    # 1. Define the exact order of time windows
+    time_order = [f"{w[0]}-{w[1]}s" for w in windows_list]
+    modalities = ['audio', 'haptic', 'visual']
+
+    # 2. Extract colors from Set2 to match your previous styling
+    palette = sns.color_palette('Set2')
+    color_map = {'audio': palette[0], 'haptic': palette[1], 'visual': palette[2]}
+
+    # 3. Create a vertically stacked grid (3 rows, 1 col)
+    # sharex and sharey ensure the scales match perfectly across all 3 modalities
+    fig, axes = plt.subplots(3, 1, figsize=(14, 12), sharex=True, sharey=True)
+
+    for i, mod in enumerate(modalities):
+        ax = axes[i]
+
+        # Isolate the data for the current modality
+        mod_data = combined_all_windows[combined_all_windows['feedback_modality'] == mod]
+
+        # 4. Plot Boxplot on the specific axis (ax)
+        sns.boxplot(
+            data=mod_data,
+            x='Time Window',
+            y='collisions',
+            order=time_order,
+            color=color_map[mod],
+            width=0.4,
+            showfliers=False,
+            boxprops={'alpha': 0.4},  # Transparency for the line
+            ax=ax
+        )
+
+        # 5. Calculate and align the Means
+        means = mod_data.groupby('Time Window')['collisions'].mean().reset_index()
+        x_map = {cat: idx for idx, cat in enumerate(time_order)}
+        means['x'] = means['Time Window'].map(x_map)
+        means = means.sort_values('x')
+
+        x = means['x'].values
+        y = means['collisions'].values
+
+        # Scatter the exact mean points
+        ax.scatter(x, y, color=color_map[mod], s=70, edgecolor='black', zorder=5)
+
+        # 6. Generate a smooth curve using a Cubic Spline
+        if len(x) >= 4:
+            x_smooth = np.linspace(x.min(), x.max(), 300)
+            spline = make_interp_spline(x, y, k=3)
+            y_smooth = spline(x_smooth)
+        else:
+            x_smooth, y_smooth = x, y
+
+        ax.plot(x_smooth, y_smooth, color=color_map[mod], linewidth=3.5, zorder=4)
+
+        # 7. Customize each subplot's aesthetics
+        ax.set_title(f'{mod.capitalize()} Modality', fontsize=13, fontweight='bold')
+        ax.set_ylabel('Collisions', fontsize=11)
+        ax.grid(axis='y', linestyle='--', alpha=0.7)
+
+        # Only show the X-axis label on the very bottom plot
+        if i == 2:
+            ax.set_xlabel('Time Window (seconds)', fontsize=12)
+        else:
+            ax.set_xlabel('')
+
+    # 8. Final Layout Adjustments
+    fig.suptitle('Collisions Over Time by Modality (0s to 5s)', fontsize=16, y=0.98)
     plt.tight_layout()
     plt.show()
 
@@ -968,11 +1178,11 @@ def plot_mean_head_position_heatmap(subjects_data_trials, bins=50):
     plt.show()
 
 
-def plot_thumbstick_heatmap(df_list, bins=50):
+def plot_thumbstick_heatmap(subjects_data_trials, bins=50):
     all_x = []
     all_y = []
 
-    for df in df_list:
+    for subject_name, df in subjects_data_trials.items():
         x = df["right_thumbstick_x"].dropna().values
         y = df["right_thumbstick_y"].dropna().values
 
@@ -994,12 +1204,12 @@ def plot_thumbstick_heatmap(df_list, bins=50):
     plt.show()
 
 
-def get_final_collision_by_gr(df_list):
+def get_final_collision_by_gr(subjects_data_full):
 
     difficulty_map = {15: "Easy", 20: "Medium", 25: "Hard"}
     results = {"Easy": [], "Medium": [], "Hard": []}
 
-    for df in df_list:
+    for subject_name, df in subjects_data_full.items():
         df = df.sort_index().reset_index(drop=True)
 
         # Identify blocks where difficulty changes
@@ -1062,6 +1272,15 @@ def plot_spatial_perception(subjects_data_trials, fbmod="visual"):
     level_to_radius = lambda l: l
 
     all_data = []
+    palette = sns.color_palette('Set2')
+    color_map = {
+        'audio': palette[0],
+        'haptic': palette[1],
+        'visual': palette[2]
+    }
+
+    # Get the specific color for the current modality (with a fallback just in case)
+    mod_color = color_map.get(fbmod, 'tab:blue')
 
     # -------- aggregate all subjects --------
     for subject_name, df in subjects_data_trials.items():
@@ -1091,7 +1310,7 @@ def plot_spatial_perception(subjects_data_trials, fbmod="visual"):
     fig, axes = plt.subplots(
         3, 8,
         subplot_kw={'projection': 'polar'},
-        figsize=(18, 7)
+        figsize=(20, 10)
     )
 
     for l in range(1, 4):
@@ -1115,7 +1334,7 @@ def plot_spatial_perception(subjects_data_trials, fbmod="visual"):
             ax.arrow(
                 degree_to_angle(d), 0,
                 0, R,
-                width=0.03,
+                width=0.09,
                 alpha=0.9,
                 color='red',
                 length_includes_head=True  # Prevents arrowheads from extending past the level
@@ -1128,24 +1347,24 @@ def plot_spatial_perception(subjects_data_trials, fbmod="visual"):
                 angles = grouped["degree_perceived"].apply(degree_to_angle)
                 radii = grouped["level_perceived"].apply(level_to_radius)
 
-                sizes = grouped["count"] * 25  # tweak if needed
+                sizes = grouped["count"] * 20  # tweak if needed
 
                 ax.scatter(
                     angles,
                     radii,
                     s=sizes,
                     alpha=0.6,
-                    color='tab:blue',
+                    color=mod_color,  # Uses the mapped Set2 color!
                     zorder=3  # Ensures the dots plot above the gray radial gridlines
                 )
 
             ax.set_ylim(0, 3.5)
             ax.set_xticks([])
             ax.set_yticks([])
-            ax.set_title(f"D{d} L{l}", fontsize=8)
+            ax.set_title(f"D{d} L{l}", fontsize=19)
 
-    plt.suptitle(f"Spatial Perception ({fbmod.capitalize()} Modality)", y=1.02, fontsize=14)
-    plt.tight_layout()
+    plt.suptitle(f"Spatial Perception ({fbmod.capitalize()} Modality)", fontsize=25)
+    plt.tight_layout(rect=[0, 0, 1, 0.96])
     plt.show()
 
 
@@ -1238,6 +1457,20 @@ def compute_error_by_modality(subjects_data_trials):
                                                ) / overall_results[lvl_cols].sum(axis=1)
 
     return overall_results, subject_distributions
+
+
+def get_lvl_err_1_p_value(error_distribution):
+    # Extract audio and haptic data
+    audio = error_distribution[error_distribution['feedback_modality'] == 'audio'][['subject_id', 'lvl_err_1']]
+    haptic = error_distribution[error_distribution['feedback_modality'] == 'haptic'][['subject_id', 'lvl_err_1']]
+
+    # Merge on subject_id to ensure the pairs match up correctly
+    merged = pd.merge(audio, haptic, on='subject_id', suffixes=('_audio', '_haptic'))
+
+    lvl_err_1_a_h = get_pairwise_p_value(merged['lvl_err_1_audio'], merged['lvl_err_1_haptic'])
+
+    return lvl_err_1_a_h
+
 
 
 def evaluate_outliers_performance(outlier_names, subject_distributions):
@@ -1473,22 +1706,6 @@ def plot_error_boxplots(error_distribution):
         ax=ax
     )
 
-    # Overlay individual subject data points
-    # dodge=True ensures the dots align vertically with their specific hue group
-    sns.stripplot(
-        data=melted_df,
-        x='error_type',
-        y='count',
-        hue='feedback_modality',
-        hue_order=modality_order,
-        color='black',
-        alpha=0.5,
-        dodge=True,
-        ax=ax,
-        legend=False  # Prevents the legend from duplicating the modality keys
-    )
-
-    # --- Labels and Formatting ---
     ax.set_xlabel("Error Type and Magnitude")
     ax.set_ylabel("Error Count (per subject)")
     ax.set_title("Distribution of Errors by Modality Across Subjects", fontsize=14, pad=15)
@@ -1614,7 +1831,7 @@ def plot_answer_duration(subjects_data_trials):
     sns.set_theme(style="whitegrid")
     modality_order = ['audio', 'haptic', 'visual']
 
-    fig, ax = plt.subplots(figsize=(10, 6))
+    fig, ax = plt.subplots(figsize=(5, 5))
 
     # Boxplot using Set2 palette
     sns.boxplot(
@@ -1623,7 +1840,8 @@ def plot_answer_duration(subjects_data_trials):
         y='answer_duration',
         order=modality_order,
         palette="Set2",
-        ax=ax
+        ax=ax,
+        showfliers=False
     )
 
     # Labels and Formatting
@@ -1634,6 +1852,31 @@ def plot_answer_duration(subjects_data_trials):
     plt.tight_layout()
     plt.show()
 
+
+def get_duration_p_value(subjects_data_trials):
+    audio_durations = []
+    haptic_durations = []
+
+    # Iterate through the dictionary to extract durations
+    for subject_name, df in subjects_data_trials.items():
+
+        df = df.copy()
+
+        df = df[df['voice_start'] != 0]
+
+        df['answer_duration'] = df['voice_end'] - df['voice_start']
+
+        audio_vals = df[df['feedback_modality'] == 'audio']['answer_duration'].tolist()
+        haptic_vals = df[df['feedback_modality'] == 'haptic']['answer_duration'].tolist()
+
+        audio_durations.extend(audio_vals)
+        haptic_durations.extend(haptic_vals)
+
+
+    # Calculate and return the p-value using your custom function
+    p_val = get_pairwise_p_value(audio_durations, haptic_durations)
+
+    return p_val
 
 
 def plot_reaction_time(subjects_data_trials):
@@ -1699,7 +1942,7 @@ def plot_reaction_time(subjects_data_trials):
     sns.set_theme(style="whitegrid")
     modality_order = ['audio', 'haptic', 'visual']
 
-    fig, ax = plt.subplots(figsize=(10, 6))
+    fig, ax = plt.subplots(figsize=(5, 5))
 
     # Boxplot using Set2 palette (no scattered data points per your request)
     sns.boxplot(
@@ -1708,7 +1951,8 @@ def plot_reaction_time(subjects_data_trials):
         y='reaction_time',
         order=modality_order,
         palette="Set2",
-        ax=ax
+        ax=ax,
+        showfliers=False
     )
 
     # Labels and Formatting
@@ -1720,6 +1964,44 @@ def plot_reaction_time(subjects_data_trials):
 
     plt.tight_layout()
     plt.show()
+
+
+def get_reaction_time_p_value(subjects_data_trials):
+    audio_rts = []
+    haptic_rts = []
+
+    # Iterate through the dictionary to extract reaction times
+    for subject_name, df in subjects_data_trials.items():
+        if df is None or df.empty:
+            continue
+
+        df = df.copy()
+
+        # Filter out missed/invalid trials where voice_start is 0
+        df = df[df['voice_start'] != 0]
+
+        if df.empty:
+            continue
+
+        # Calculate Reaction Time: Voice Start minus Cue Presentation
+        df['reaction_time'] = df['voice_start'] - df['relative_timestamp']
+
+        # Extract values for audio and haptic
+        audio_vals = df[df['feedback_modality'] == 'audio']['reaction_time'].tolist()
+        haptic_vals = df[df['feedback_modality'] == 'haptic']['reaction_time'].tolist()
+
+        audio_rts.extend(audio_vals)
+        haptic_rts.extend(haptic_vals)
+
+    # Safety check to ensure we have data for both modalities
+    if not audio_rts or not haptic_rts:
+        print("Not enough valid reaction time data to compare audio and haptic.")
+        return None
+
+    # Calculate and return the p-value using your custom function
+    p_val = get_pairwise_p_value(audio_rts, haptic_rts)
+
+    return p_val
 
 
 def apply_audio_delays(subjects_data_trials, delays_df):
