@@ -23,7 +23,7 @@ public class MyGameManager : MonoBehaviour
     void Start()
     {
         experimentPhase = 0;
-        experimentType = 6; // 1 or 2 or 3 or ... or 6. Change this number before each participant starts.
+        experimentType = 1; // 1 or 2 or 3 or ... or 6. Change this number before each participant starts.
         //sObstacleGenExactOnUvaProb = 0.1f;
 
     }
