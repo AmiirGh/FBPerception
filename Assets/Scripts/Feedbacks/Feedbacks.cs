@@ -19,8 +19,6 @@ public class Feedbacks : MonoBehaviour
         {
             //int fbModality = UnityEngine.Random.Range((int)FbModality.visual, (int)FbModality.haptic+1); // V: 1, A: 2, H:3   So this random generates a feeddback between audio and haptic
             int fbModality = GetFeedbackModality();
-
-            fbModality = (int)FbModality.visual;
             if (dynamicObstacleSpawner.isDynamicObstaclePresent)
             {
                 if (fbModality == 1) feedbackModality = "visual";

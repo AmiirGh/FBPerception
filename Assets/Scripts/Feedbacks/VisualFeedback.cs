@@ -12,7 +12,7 @@ public class VisualFeedback : MonoBehaviour
     [SerializeField] private GameObject feedbackPlane;
     [SerializeField] private Feedbacks feedbacks;
 
-    public Vector3 posOffset = new Vector3(0, -1.93f, 7.1f);
+    public Vector3 posOffset = new Vector3(0, -1.93f, 8.0f);
     public float multiplier = 0.5f;
     private List<float> feedbackRadii = new List<float> { 1.06f, 1.53f, 2.0f};
 

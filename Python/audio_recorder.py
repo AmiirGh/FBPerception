@@ -27,9 +27,8 @@ if __name__ == "__main__":
 
     print(experiment_phase)
     subject_name, subject_id = read_subject_info()
-
     if experiment_phase == 1:
-        duration = 72*10 + 10
+        duration =  72*10+10
     else: # phase 2 or 3
         duration = 72*10  # for phase 1, we need 10 more seconds so that we capture the last command
                           # 72 is for 72 intervals each 10 seconds

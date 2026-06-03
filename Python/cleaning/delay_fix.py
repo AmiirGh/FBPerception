@@ -55,7 +55,7 @@ def remove_all_cleaned_from(list, dir):
 
 if __name__ == '__main__':
     delays = pd.read_excel('audio delays.xlsx')
-    subjects = delays.loc[0:54]
+    subjects = delays.loc[0:55]
 
     for index in subjects.index:
         subject_name = subjects.loc[index, 'Subject']
@@ -76,17 +76,14 @@ if __name__ == '__main__':
                         'Alireza_4326', 'Ebram_9796', 'MohammadHossein_7311', 'Mehrsa_8611', 'Shahla_6430',
                         'Hossein_8754', 'MohammadMash_317', 'Zahra_3701', 'Sepideh_6913', 'Yegane_5688', 'Saber_1648',
                         'Samar_1783',  'Shahab_2645', 'Hossein_1501', 'Asra_9174', 'Asal_6565', 'Fatemeh_5992',
-                        'Yas_4358']
+                        'Yas_4358', 'Armin_1920']
 
     not_cleaned_subjects = []
     single_subject_mode = []
 
-    # remove_all_cleaned_from(s1_j_c1, 's1-j-c1')
-    # remove_all_cleaned_from(cleaned_subjects, 's1-s2-j')
-
     i = 0
     for s in single_subject_mode:
-        clean(folder_dir='../s1-s2-j', subject_namee=s)
+        clean(folder_dir='../Dataset/Recordings', subject_namee=s)
         i += 1
 
 

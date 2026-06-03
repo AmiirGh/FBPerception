@@ -8,6 +8,8 @@ import scipy.stats as stats
 import warnings
 warnings.filterwarnings("ignore")
 import time
+import matplotlib.lines as mlines
+from matplotlib.lines import Line2D
 from scipy.interpolate import make_interp_spline
 
 def get_full_df_list():
@@ -818,7 +820,7 @@ def plot_collisions_by_difficulty(subjects_data_full):
     records = []
 
     # Map the generation rate to your difficulty labels
-    diff_map = {15: 'Easy (Rate: 15)', 20: 'Medium (Rate: 20)', 25: 'Hard (Rate: 25)'}
+    diff_map = {15: 'Easy', 20: 'Medium', 25: 'Hard'}
 
     for subject, df in subjects_data_full.items():
         if df is None or df.empty:
@@ -846,15 +848,13 @@ def plot_collisions_by_difficulty(subjects_data_full):
                 })
 
     df_plot = pd.DataFrame(records)
-    if df_plot.empty:
-        print("No valid data available to plot.")
-        return
 
-    plt.figure(figsize=(9, 6))
+    plt.figure(figsize=(6, 4))
+    order = ['Easy', 'Medium', 'Hard']
 
-    # 1. Define order and your custom palette
-    order = ['Easy (Rate: 15)', 'Medium (Rate: 20)', 'Hard (Rate: 25)']
-    custom_palette = ["green", "blue", "red"]
+    # Extract the 5th, 6th, and 7th colors from the Set2 palette (indices 4, 5, and 6)
+    set2_colors = sns.color_palette("Set2")
+    custom_palette = [set2_colors[4], set2_colors[5], set2_colors[3]]
 
     # 2. Draw the Boxplot
     sns.boxplot(
@@ -867,27 +867,13 @@ def plot_collisions_by_difficulty(subjects_data_full):
         showfliers=False  # We hide outliers here so the stripplot can handle them clearly
     )
 
-    # 3. Overlay the individual subjects' data points (optional but highly recommended!)
-    # This allows you to see the exact spread of your 50+ subjects
-    sns.stripplot(
-        data=df_plot,
-        x='Difficulty',
-        y='Collisions',
-        order=order,
-        color='black',
-        alpha=0.6,
-        jitter=True,
-        size=5
-    )
-
-    # 4. Customize Aesthetics
-    plt.title('Total Collisions by Difficulty Level', fontsize=14, fontweight='bold')
-    plt.xlabel('Difficulty (Generation Rate)', fontsize=12)
-    plt.ylabel('Total Number of Collisions', fontsize=12)
+    plt.xlabel('Difficulty', fontsize=10)
+    plt.ylabel('Total Number of Collisions', fontsize=10)
     plt.grid(axis='y', linestyle='--', alpha=0.7)
-
-    plt.tight_layout()
+    plt.savefig('fig_number_of_collisions_by_difficulty.pdf', format='pdf', bbox_inches='tight')
     plt.show()
+
+
 def calc_no_collisions_by_fbmod_for_time_window(subjects_data_full, subjects_data_trials, start_sec, end_sec):
     all_results = []
 
@@ -1254,8 +1240,79 @@ def final_coll_by_gr_p_val_df(final_collision_by_gr):
     pass
 
 
-def plot_spatial_perception(subjects_data_trials, fbmod="visual"):
-    # Cleaner dictionary mapping instead of long if/elif chain
+# def plot_spatial_perception(subjects_data_trials, fbmod="visual"):
+#     def degree_to_angle(d):
+#         mapping = {1: 2 * np.pi / 4, 2: np.pi / 4, 3: 0, 4: 7 * np.pi / 4, 5: 6 * np.pi / 4, 6: 5 * np.pi / 4,
+#             7: 4 * np.pi / 4, 8: 3 * np.pi / 4}
+#         return mapping.get(d, 0)
+#
+#     level_to_radius = lambda l: l*1.1
+#
+#     all_data = []
+#     palette = sns.color_palette('Set2')
+#     color_map = {'audio': palette[0], 'haptic': palette[1], 'visual': palette[2]}
+#
+#     mod_color = color_map.get(fbmod, 'tab:blue')
+#     base_scatter_size = 18
+#     for subject_name, df in subjects_data_trials.items():
+#         if df is None or df.empty:
+#             continue
+#         df_mod = df[df["feedback_modality"] == fbmod].copy()
+#         df_mod = df_mod[df_mod["degree_perceived"] > 0]
+#         cols = ["degree", "level", "degree_perceived", "level_perceived"]
+#         all_data.append(df_mod[cols])
+#
+#     data = pd.concat(all_data, ignore_index=True)
+#
+#     fig, axes = plt.subplots(3, 8, subplot_kw={'projection': 'polar'}, figsize=(20, 10))
+#     for l in range(1, 4):
+#         for d in range(1, 9):
+#
+#             ax = axes[l - 1, d - 1]
+#
+#             subset = data[(data["degree"] == d) & (data["level"] == l)]
+#
+#             R = level_to_radius(l)
+#             # --- radial reference circles ---
+#             theta_full = np.linspace(0, 2 * np.pi, 200)
+#
+#             # Cleaned up reference circles to map exactly to levels 1, 2, and 3
+#             ax.plot(theta_full, np.full_like(theta_full, level_to_radius(1)), alpha=0.5, color='black')
+#             ax.plot(theta_full, np.full_like(theta_full, level_to_radius(2)), alpha=0.5, color='black')
+#             ax.plot(theta_full, np.full_like(theta_full, level_to_radius(3)), alpha=0.5, color='black')
+#
+#             # --- true stimulus arrow ---
+#             base_width = 0.15
+#             base_head_width = 0.45
+#             base_head_length = 0.4
+#             ax.arrow(degree_to_angle(d), 0, 0, R, width=base_width / R, head_width=base_head_width / R,
+#                 head_length=base_head_length, alpha=0.9, color='red', length_includes_head=True)
+#
+#             # --- aggregated perceived responses ---
+#             if len(subset) > 0:
+#                 grouped = subset.groupby(["degree_perceived", "level_perceived"]).size().reset_index(name="count")
+#
+#                 angles = grouped["degree_perceived"].apply(degree_to_angle)
+#                 radii = grouped["level_perceived"].apply(level_to_radius)
+#
+#                 sizes = grouped["count"] * 18  # tweak if needed
+#
+#                 ax.scatter(angles, radii, s=sizes, alpha=0.6, color=mod_color, zorder=3)
+#
+#             ax.set_ylim(0, 4.5)
+#             ax.set_xticks([])
+#             ax.set_yticks([])
+#             ax.spines['polar'].set_visible(False)
+#             ax.set_title(f"D{d} L{l}", fontsize=19)
+#
+#     plt.suptitle(f"Spatial Perception ({fbmod.capitalize()} Modality)", fontsize=30)
+#     # plt.tight_layout(rect=[0, 0, 1, 0.96])
+#     plt.show()
+
+
+def plot_all_perceptions(subjects_data_trials, mod1='audio', mod2='haptic', mod3='visual'):
+    modalities = [mod1, mod2, mod3]
+
     def degree_to_angle(d):
         mapping = {
             1: 2 * np.pi / 4,
@@ -1269,103 +1326,121 @@ def plot_spatial_perception(subjects_data_trials, fbmod="visual"):
         }
         return mapping.get(d, 0)
 
-    level_to_radius = lambda l: l
+    def level_to_radius(l):
+        return l * 1.4
 
-    all_data = []
     palette = sns.color_palette('Set2')
-    color_map = {
-        'audio': palette[0],
-        'haptic': palette[1],
-        'visual': palette[2]
-    }
+    color_map = {'audio': palette[0], 'haptic': palette[1], 'visual': palette[2]}
+    base_scatter_size = 18
 
-    # Get the specific color for the current modality (with a fallback just in case)
-    mod_color = color_map.get(fbmod, 'tab:blue')
+    all_subject_dfs = [df for df in subjects_data_trials.values() if df is not None and not df.empty]
+    full_data = pd.concat(all_subject_dfs, ignore_index=True)
+    full_data = full_data[full_data["degree_perceived"] > 0]
+    max_count = full_data.groupby(["feedback_modality", "degree", "level", "degree_perceived", "level_perceived"]).size().max()
+    print(f"The maximum response count is: {max_count}")
 
-    # -------- aggregate all subjects --------
-    for subject_name, df in subjects_data_trials.items():
-        if df is None or df.empty:
+
+
+    # ------------------------------------------------------------------
+    # Plot
+    # ------------------------------------------------------------------
+    fig, axes = plt.subplots(9,8, subplot_kw={'projection': 'polar'}, figsize=(28, 32))
+
+    for m_idx, fbmod in enumerate(modalities):
+        mod_color = color_map.get(fbmod, 'tab:blue')
+        all_data = []
+
+        for subject_name, df in subjects_data_trials.items():
+            if df is None or df.empty:
+                continue
+            df_mod = df[df["feedback_modality"] == fbmod].copy()
+            # remove misses and setup misses
+            df_mod = df_mod[df_mod["degree_perceived"] > 0]
+            cols = ["degree", "level", "degree_perceived", "level_perceived"]
+            if not df_mod.empty:
+                all_data.append(df_mod[cols])
+
+        if len(all_data) == 0:
             continue
 
-        # Filter by requested modality
-        df_mod = df[df["feedback_modality"] == fbmod].copy()
+        data = pd.concat(all_data, ignore_index=True)
 
-        # Remove misses (0) and setup misses (-1)
-        # since they have no physical coordinates to plot
-        df_mod = df_mod[df_mod["degree_perceived"] > 0]
+        for l in range(1, 4):
+            for d in range(1, 9):
+                row_idx = (m_idx * 3) + (l - 1)
+                col_idx = d - 1
+                ax = axes[row_idx, col_idx]
+                subset = data[(data["degree"] == d) & (data["level"] == l)]
+                R = level_to_radius(l)
 
-        # Verify columns exist before appending
-        cols = ["degree", "level", "degree_perceived", "level_perceived"]
-        if all(c in df_mod.columns for c in cols):
-            all_data.append(df_mod[cols])
+                # ------------------------------------------------------
+                # Reference circles
+                # ------------------------------------------------------
+                theta_full = np.linspace(0, 2 * np.pi, 200)
+                ax.plot(theta_full, np.full_like(theta_full, level_to_radius(1)), alpha=0.5, color='black')
+                ax.plot(theta_full, np.full_like(theta_full, level_to_radius(2)), alpha=0.5, color='black')
+                ax.plot(theta_full, np.full_like(theta_full, level_to_radius(3)), alpha=0.5, color='black')
 
-    # Safety check if modality data is missing entirely
-    if not all_data:
-        print(f"No valid spatial data found for modality: {fbmod}")
-        return
+                # ------------------------------------------------------
+                # True stimulus arrow
+                # ------------------------------------------------------
+                base_width = 0.20
+                base_head_width = 0.55
+                base_head_length = 0.55
+                ax.arrow(degree_to_angle(d),0, 0, R, width=base_width / R, head_width=base_head_width / R,
+                    head_length=base_head_length, alpha=0.9, color='red', length_includes_head=True)
 
-    data = pd.concat(all_data, ignore_index=True)
+                # ------------------------------------------------------
+                # Perceived responses
+                # ------------------------------------------------------
+                if len(subset) > 0:
+                    grouped = (subset.groupby(["degree_perceived","level_perceived"]).size().reset_index(name="count"))
+                    angles = grouped["degree_perceived"].apply(degree_to_angle)
+                    radii = grouped["level_perceived"].apply(level_to_radius)
+                    sizes = grouped["count"] * base_scatter_size
+                    ax.scatter(angles, radii, s=sizes, alpha=0.6, color=mod_color, zorder=3, clip_on=False)
 
-    # -------- plotting --------
-    fig, axes = plt.subplots(
-        3, 8,
-        subplot_kw={'projection': 'polar'},
-        figsize=(20, 10)
-    )
+                ax.set_ylim(0, 4.5)
+                ax.set_xticks([])
+                ax.set_yticks([])
+                ax.spines['polar'].set_visible(False)
 
-    for l in range(1, 4):
-        for d in range(1, 9):
+    # ------------------------------------------------------------------
+    # Modality color legend
+    # ------------------------------------------------------------------
+    modality_handles = [
+        Line2D([0], [0], marker='o', color='w', markerfacecolor=color_map['audio'], markersize=40, label='Audio'),
+        Line2D([0], [0], marker='o', color='w', markerfacecolor=color_map['haptic'], markersize=40, label='Haptic'),
+        Line2D([0], [0],marker='o',color='w',markerfacecolor=color_map['visual'],markersize=40,label='Visual')]
 
-            ax = axes[l - 1, d - 1]
+    modality_legend = fig.legend(handles=modality_handles, loc='upper left', bbox_to_anchor=(0.0, 1.0),
+        ncol=3, prop={'family': 'Times New Roman', 'size': 40}, frameon=False, handletextpad=0.4,columnspacing=1.2)
+    fig.add_artist(modality_legend)
 
-            subset = data[(data["degree"] == d) & (data["level"] == l)]
+    # ------------------------------------------------------------------
+    # Scatter size legend
+    # ------------------------------------------------------------------
+    legend_ax = fig.add_axes([0.60, 0.92, 0.38, 0.08])
+    legend_ax.axis('off')
+    my_font = {'family': 'Times New Roman', 'size': 40}
+    legend_ax.text(0.0, 0.6, 'Perception count:', ha='left', va='center',
+                   fontdict=my_font, transform=legend_ax.transAxes)
+    size_values = [10, 70, max_count]
+    x_positions = [0.6, 0.75, 0.9]
+    for x, v in zip(x_positions, size_values):
+        legend_ax.scatter(x, 0.6, s=v * base_scatter_size, color='gray', alpha=0.6,
+                          transform=legend_ax.transAxes, clip_on=False)
+        legend_ax.text(x, 0.4, f'{v}', ha='center', va='top',
+                       fontdict=my_font, transform=legend_ax.transAxes)
+    # ------------------------------------------------------------------
+    # Layout and save
+    # ------------------------------------------------------------------
+    plt.tight_layout(rect=[0, 0, 1, 0.93])
+    plt.savefig('spatial_perception_results.pdf', format='pdf',bbox_inches='tight')
+    # plt.show()
 
-            R = level_to_radius(l)
 
-            # --- radial reference circles ---
-            theta_full = np.linspace(0, 2 * np.pi, 200)
 
-            # Cleaned up reference circles to map exactly to levels 1, 2, and 3
-            ax.plot(theta_full, np.full_like(theta_full, 1), alpha=0.2, color='gray')
-            ax.plot(theta_full, np.full_like(theta_full, 2), alpha=0.2, color='gray')
-            ax.plot(theta_full, np.full_like(theta_full, 3), alpha=0.2, color='gray')
-
-            # --- true stimulus arrow ---
-            ax.arrow(
-                degree_to_angle(d), 0,
-                0, R,
-                width=0.09,
-                alpha=0.9,
-                color='red',
-                length_includes_head=True  # Prevents arrowheads from extending past the level
-            )
-
-            # --- aggregated perceived responses ---
-            if len(subset) > 0:
-                grouped = subset.groupby(["degree_perceived", "level_perceived"]).size().reset_index(name="count")
-
-                angles = grouped["degree_perceived"].apply(degree_to_angle)
-                radii = grouped["level_perceived"].apply(level_to_radius)
-
-                sizes = grouped["count"] * 20  # tweak if needed
-
-                ax.scatter(
-                    angles,
-                    radii,
-                    s=sizes,
-                    alpha=0.6,
-                    color=mod_color,  # Uses the mapped Set2 color!
-                    zorder=3  # Ensures the dots plot above the gray radial gridlines
-                )
-
-            ax.set_ylim(0, 3.5)
-            ax.set_xticks([])
-            ax.set_yticks([])
-            ax.set_title(f"D{d} L{l}", fontsize=19)
-
-    plt.suptitle(f"Spatial Perception ({fbmod.capitalize()} Modality)", fontsize=25)
-    plt.tight_layout(rect=[0, 0, 1, 0.96])
-    plt.show()
 
 
 def compute_error_by_modality(subjects_data_trials):
@@ -2070,8 +2145,7 @@ def plot_error_collision_tradeoff(subjects_data_trials, subjects_data_full):
 
         # 3. Get the last recorded number of collisions for the subject
         last_collisions = df['number_of_collision'].iloc[-1]
-        # subjcet_df_full = subjects_data_full[subject_name]
-        # last_collisions = subjcet_df_full['number_of_collision'].iloc[-1]
+
         # Append the metrics for this subject
         stats_list.append({
             'Subject': subject_name,
@@ -2086,16 +2160,28 @@ def plot_error_collision_tradeoff(subjects_data_trials, subjects_data_full):
         print("No valid subject data available to plot.")
         return
 
+    # --- NEW: Calculate Pearson correlation ---
+    r, p_value = stats.pearsonr(df_summary['Total Errors'], df_summary['Total Collisions'])
+
     # 4. Plot the Scatter Plot with a Regression Line
     plt.figure(figsize=(8, 6))
 
-    sns.regplot(
+    ax = sns.regplot(
         data=df_summary,
         x='Total Errors',
         y='Total Collisions',
         scatter_kws={'s': 60, 'alpha': 0.8, 'color': '#1f77b4'},  # Customize dots
         line_kws={'color': '#d62728', 'linewidth': 2}  # Customize regression line
     )
+
+    # --- NEW: Add the Pearson value to the plot ---
+    # Create a formatted string for the r and p values
+    stats_text = f'Pearson r = {r:.2f}\n'
+
+    # Place text in the upper left corner of the axes (0.05, 0.95)
+    props = dict(boxstyle='round', facecolor='white', alpha=0.8, edgecolor='gray')
+    ax.text(0.05, 0.95, stats_text, transform=ax.transAxes, fontsize=12,
+            verticalalignment='top', bbox=props)
 
     # 5. Labels and Layout
     plt.title('Dual-Task Trade-off: Perception Errors vs. Total Collisions', fontsize=14)
@@ -2105,6 +2191,82 @@ def plot_error_collision_tradeoff(subjects_data_trials, subjects_data_full):
 
     plt.tight_layout()
     plt.show()
+
+
+def plot_difficulty_error_collision_tradeoff(subjects_data_trials, difficulty):
+    stats_list = []
+
+    for subject_name, df in subjects_data_trials.items():
+        # Skip empty dataframes if any
+        if df is None or df.empty:
+            continue
+
+        # 1. Filter for hard difficulty phase
+        if difficulty == 'easy': gr = 15
+        elif difficulty == 'medium': gr = 20
+        elif difficulty == 'hard': gr = 25
+        df_hard = df[df['generation_rate'] == gr]
+
+        # Skip if subject has no data for the hard phase
+        if df_hard.empty:
+            continue
+
+        # 2. Filter out trials where perceived values are -1
+        df_hard_filtered = df_hard[(df_hard['degree_perceived'] != -1) | (df_hard['degree_perceived'] != 0)]
+
+        # 3. Count errors specifically in the hard phase
+        hard_errors = ((df_hard_filtered['degree'] != df_hard_filtered['degree_perceived']) |
+                       (df_hard_filtered['level'] != df_hard_filtered['level_perceived'])).sum()
+
+        # 4. Get collisions specifically in the hard phase
+        # Assuming 'number_of_collision' is cumulative, we subtract the starting count from the ending count
+        hard_collisions = df_hard['number_of_collision'].max() - df_hard['number_of_collision'].min()
+
+        # Append the metrics for this subject
+        stats_list.append({
+            'Subject': subject_name,
+            f'{difficulty} Errors': hard_errors,
+            f'{difficulty} Collisions': hard_collisions
+        })
+
+    # Convert summary to a DataFrame
+    df_summary = pd.DataFrame(stats_list)
+
+    if df_summary.empty:
+        print("No valid subject data available for the hard phase to plot.")
+        return
+
+    # --- Calculate Pearson correlation ---
+    r, _ = stats.pearsonr(df_summary[f'{difficulty} Errors'], df_summary[f'{difficulty} Collisions'])
+
+    # 5. Plot the Scatter Plot with a Regression Line
+    plt.figure(figsize=(8, 6))
+
+    ax = sns.regplot(
+        data=df_summary,
+        x=f'{difficulty} Errors',
+        y=f'{difficulty} Collisions',
+        scatter_kws={'s': 60, 'alpha': 0.8, 'color': '#ff7f0e'},  # Orange dots for hard mode
+        line_kws={'color': '#d62728', 'linewidth': 2}  # Red regression line
+    )
+
+    # --- Add the Pearson value to the plot ---
+    stats_text = f'Pearson r = {r:.2f}'
+
+    # Place text in the upper left corner of the axes (0.05, 0.95)
+    props = dict(boxstyle='round', facecolor='white', alpha=0.8, edgecolor='gray')
+    ax.text(0.05, 0.95, stats_text, transform=ax.transAxes, fontsize=12,
+            verticalalignment='top', bbox=props)
+
+    # 6. Labels and Layout
+    plt.title(f'{difficulty} Phase Trade-off: Perception Errors vs. Collisions', fontsize=14)
+    plt.xlabel('Errors in Hard Phase', fontsize=12)
+    plt.ylabel('Collisions in Hard Phase', fontsize=12)
+    plt.grid(True, linestyle='--', alpha=0.5)
+
+    plt.tight_layout()
+    plt.show()
+
 
 
 def plot_misses_collision_tradeoff(subjects_data_trials):
@@ -2139,16 +2301,26 @@ def plot_misses_collision_tradeoff(subjects_data_trials):
         print("No valid subject data available to plot.")
         return
 
+    # --- NEW: Calculate Pearson correlation (ignoring p-value) ---
+    r, _ = stats.pearsonr(df_summary['Total Misses'], df_summary['Total Collisions'])
+
     # 4. Plot the Scatter Plot with a Regression Line
     plt.figure(figsize=(8, 6))
 
-    sns.regplot(
+    ax = sns.regplot(
         data=df_summary,
         x='Total Misses',
         y='Total Collisions',
-        scatter_kws={'s': 60, 'alpha': 0.8, 'color': '#2ca02c'},  # Greenish dots to distinguish from the previous plot
+        scatter_kws={'s': 60, 'alpha': 0.8, 'color': '#2ca02c'},  # Greenish dots
         line_kws={'color': '#d62728', 'linewidth': 2}  # Red regression line
     )
+
+    # --- NEW: Add ONLY the Pearson r value to the plot ---
+    stats_text = f'Pearson r = {r:.2f}'
+
+    props = dict(boxstyle='round', facecolor='white', alpha=0.8, edgecolor='gray')
+    ax.text(0.05, 0.95, stats_text, transform=ax.transAxes, fontsize=12,
+            verticalalignment='top', bbox=props)
 
     # 5. Labels and Layout
     plt.title('Dual-Task Trade-off: Perception Misses vs. Total Collisions', fontsize=14)
@@ -2401,4 +2573,72 @@ def print_subjects_with_high_specific_mod_misses(subjects_data_trials, fb_mod):
             print(f"• {subject_name} (Total misses: {miss_count})")
             found_any = True
 
+
+def plot_misses_vs_errors(subjects_data_trials):
+    """
+    Plots a regression scatter plot of Total Misses vs Total Errors per subject,
+    and calculates the Pearson correlation coefficient.
+    """
+    stats_list = []
+
+    # 1. Calculate metrics per subject
+    for subject_name, df in subjects_data_trials.items():
+        if df is None or df.empty:
+            continue
+
+        # Filter out invalid trials (-1)
+        df_filtered = df[(df['degree_perceived'] != -1) & (df['level_perceived'] != -1)]
+
+        # Count Misses (where perceived is strictly 0)
+        misses = ((df_filtered['degree_perceived'] == 0) |
+                  (df_filtered['level_perceived'] == 0)).sum()
+
+        # Count Errors (where perceived does not match the actual stimuli)
+        errors = ((df_filtered['degree'] != df_filtered['degree_perceived']) |
+                  (df_filtered['level'] != df_filtered['level_perceived'])).sum()
+
+        stats_list.append({
+            'Subject': subject_name,
+            'Total Misses': misses,
+            'Total Errors': errors
+        })
+
+    df_summary = pd.DataFrame(stats_list)
+
+    if df_summary.empty:
+        print("No valid data to plot.")
+        return
+
+    # 2. Calculate the Pearson Correlation Coefficient
+    corr_val, p_val = stats.pearsonr(df_summary['Total Errors'], df_summary['Total Misses'])
+
+    # 3. Create the Scatter Plot
+    plt.figure(figsize=(8, 6))
+
+    sns.regplot(
+        data=df_summary,
+        x='Total Errors',
+        y='Total Misses',
+        scatter_kws={'s': 60, 'alpha': 0.8, 'color': '#9467bd'},  # Purple dots
+        line_kws={'color': '#d62728', 'linewidth': 2}  # Red regression line
+    )
+
+    # 4. Add the correlation text box inside the plot
+    textstr = f'Pearson r = {corr_val:.3f}'
+    plt.text(
+        0.05, 0.95, textstr,
+        transform=plt.gca().transAxes,
+        fontsize=12,
+        verticalalignment='top',
+        bbox=dict(boxstyle='round', facecolor='white', alpha=0.8, edgecolor='gray')
+    )
+
+    # 5. Customize Aesthetics
+    plt.title('Relationship Between Total Errors and Total Misses', fontsize=14)
+    plt.xlabel('Total Errors (Degree or Level mismatch)', fontsize=12)
+    plt.ylabel('Total Misses (Perceived == 0)', fontsize=12)
+    plt.grid(True, linestyle='--', alpha=0.5)
+
+    plt.tight_layout()
+    plt.show()
 

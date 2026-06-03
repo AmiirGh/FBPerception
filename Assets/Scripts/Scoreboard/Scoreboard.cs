@@ -7,10 +7,12 @@ public class Scoreboard : MonoBehaviour
     [SerializeField] private CollisionDetector collisionDetector;
     public Vector3 scoreboardPositionOffset;
     public TMP_Text scoreboard;
+    public int temp_text;
 
     void Start()
     {
         scoreboardPositionOffset = new Vector3(-1.7f, 3.55f, 8.21f);
+        temp_text = 44;
     }
 
     // Update is called once per frame
