@@ -597,6 +597,245 @@ def process_mid_questionnaire(questionnaire_directory):
         print(f"❌ Error processing the file: {e}")
 
 
+def remove_nondominant_ind_but_col(recording_directory):
+    # Iterate through all folders in the recording directory
+    for folder_name in os.listdir(recording_directory):
+        folder_path = os.path.join(recording_directory, folder_name)
+
+        # Ensure we are only looking inside directories (like '01', '02', etc.)
+        if not os.path.isdir(folder_path):
+            continue
+
+        demographics_path = os.path.join(folder_path, "Demographics.csv")
+        logs_path = os.path.join(folder_path, "Raw experiment logs.csv")
+
+        # Skip this folder if it's missing either of the required files
+        if not (os.path.exists(demographics_path) and os.path.exists(logs_path)):
+            continue
+
+        try:
+            # 1. Read Demographics to find Handedness
+            df_demo = pd.read_csv(demographics_path, header=None)
+            handedness = None
+
+            # Search row by row for 'handness'
+            for index, row in df_demo.iterrows():
+                row_str = row.astype(str).str.lower()
+
+                if row_str.str.contains('handness').any():
+                    if row_str.str.contains('right').any():
+                        handedness = 'right'
+                        break
+                    elif row_str.str.contains('left').any():
+                        handedness = 'left'
+                        break
+
+            if not handedness:
+                print(f"⚠️ {folder_name}: Could not determine handedness.")
+                continue
+
+            # 2. Read Raw experiment logs
+            df_logs = pd.read_csv(logs_path)
+
+            # Determine which column to REMOVE and which to RENAME
+            col_to_remove = "Left index but" if handedness == 'right' else "Right index but"
+            col_to_keep = "Right index but" if handedness == 'right' else "Left index but"
+
+            # 3. Drop the non-dominant column
+            if col_to_remove in df_logs.columns:
+                df_logs = df_logs.drop(columns=[col_to_remove])
+                removed = True
+            else:
+                removed = False
+
+            # 4. Rename the dominant column to "Index button"
+            if col_to_keep in df_logs.columns:
+                df_logs = df_logs.rename(columns={col_to_keep: "Index button"})
+                renamed = True
+            else:
+                renamed = False
+
+            # 5. Overwrite the original file with the updated dataframe
+            if removed or renamed:
+                df_logs.to_csv(logs_path, index=False)
+                print(
+                    f"✅ {folder_name}: {handedness.capitalize()}-handed. Removed '{col_to_remove}' & Renamed '{col_to_keep}' to 'Index button'.")
+            else:
+                print(f"ℹ️ {folder_name}: No changes made (columns not found).")
+
+        except Exception as e:
+            print(f"❌ Error processing folder {folder_name}: {e}")
+
+
+def merge_raw_perception(recording_directory):
+    # Iterate through all folders in the recording directory
+    for folder_name in os.listdir(recording_directory):
+        folder_path = os.path.join(recording_directory, folder_name)
+
+        # Ensure we are only looking inside directories
+        if not os.path.isdir(folder_path):
+            continue
+
+        raw_path = os.path.join(folder_path, "Raw experiment logs.csv")
+        perc_path = os.path.join(folder_path, "Perception results.csv")
+
+        # Skip if either file is missing
+        if not (os.path.exists(raw_path) and os.path.exists(perc_path)):
+            continue
+
+        try:
+            # 1. Load both datasets
+            df_raw = pd.read_csv(raw_path)
+            df_perc = pd.read_csv(perc_path)
+
+            # 2. Calculate the Global Response Start and End for each trial
+            offset = df_perc['Timestamp'] - df_perc['Phase timestamp']
+            df_perc['Global_Start'] = offset + df_perc['Response start']
+            df_perc['Global_End'] = offset + df_perc['Response end']
+
+            # 3. Select only the necessary columns to merge
+            perc_subset = df_perc[
+                ['Trial number', 'Angle perceived', 'Distance perceived', 'Global_Start', 'Global_End']]
+
+            # 4. Merge these values into the raw logs based on 'Trial number'
+            df_merged = df_raw.merge(perc_subset, on='Trial number', how='left')
+
+            # 5. Create a condition (mask): Is the raw Timestamp between Global_Start and Global_End?
+            is_answering = (df_merged['Timestamp'] >= df_merged['Global_Start']) & \
+                           (df_merged['Timestamp'] <= df_merged['Global_End'])
+
+            # 6. Apply the logic: if they are answering, keep the perceived values. Otherwise, set to 0.
+            df_merged['Angle perceived'] = np.where(is_answering, df_merged['Angle perceived'], 0)
+            df_merged['Distance perceived'] = np.where(is_answering, df_merged['Distance perceived'], 0)
+
+            # 7. Clean up the temporary calculation columns
+            df_merged = df_merged.drop(columns=['Global_Start', 'Global_End'])
+
+            # ---------------------------------------------------------
+            # 8. REORDER THE COLUMNS
+            # ---------------------------------------------------------
+            # Define the exact leading columns as requested
+            leading_columns = [
+                'Timestamp',  # 1st
+                'Trial number',  # 2nd
+                'Modality',  # 3rd
+                'Angle',  # 4th
+                'Distance',  # 5th
+                'Angle perceived',  # 6th
+                'Distance perceived'  # 7th
+            ]
+
+            # Automatically grab all remaining columns that aren't in our list above
+            remaining_columns = [col for col in df_merged.columns if col not in leading_columns]
+
+            # Combine them to create the final column layout
+            final_column_order = leading_columns + remaining_columns
+
+            # Apply the new order to the dataframe
+            df_merged = df_merged[final_column_order]
+            # ---------------------------------------------------------
+
+            # 9. Overwrite the original Raw logs file with the new order
+            df_merged.to_csv(raw_path, index=False)
+            print(f"✅ {folder_name}: Successfully merged perception data and reordered columns.")
+
+        except Exception as e:
+            print(f"❌ Error processing folder {folder_name}: {e}")
+
+
+def rename_values(recording_directory):
+    # This function replaces '-' with 0 in the Modality column and clears the Collision position for all rows except the exact frames where the Number of collision increases.
+    for folder_name in os.listdir(recording_directory):
+        folder_path = os.path.join(recording_directory, folder_name)
+
+        if not os.path.isdir(folder_path):
+            continue
+
+        raw_path = os.path.join(folder_path, "Raw experiment logs.csv")
+
+        if not os.path.exists(raw_path):
+            continue
+
+        try:
+            df = pd.read_csv(raw_path)
+
+            # 1. Change Modality '-' to 0
+            if 'Modality' in df.columns:
+                # Replaces the string '-' with the number 0
+                df['Modality'] = df['Modality'].replace('-', 0)
+
+            # 2. Filter Collision position
+            if 'Number of collision' in df.columns and 'Collision position' in df.columns:
+                # df.diff() calculates the difference between the current row and the previous row.
+                # If the difference is greater than 0, it means the collision count just went up (a collision happened!)
+                # We use fillna(0) just in case the very first row of the dataset is empty.
+                is_new_collision = df['Number of collision'].diff().fillna(0) > 0
+
+                # If a new collision happened, keep the position. Otherwise, make it empty ("").
+                df['Collision position'] = np.where(is_new_collision, df['Collision position'], "0")
+
+            # Overwrite the original file
+            df.to_csv(raw_path, index=False)
+            print(f"✅ {folder_name}: Updated Modality and cleaned up Collision positions.")
+
+        except Exception as e:
+            print(f"❌ Error processing folder {folder_name}: {e}")
+
+
+def merge_demographics(recording_directory):
+    # A list to store the single-row dataframes for each participant
+    all_demographics = []
+
+    # Iterate through all folders in the recording directory
+    for folder_name in os.listdir(recording_directory):
+        folder_path = os.path.join(recording_directory, folder_name)
+
+        # Ensure we are only looking inside directories
+        if not os.path.isdir(folder_path):
+            continue
+
+        demo_path = os.path.join(folder_path, "Demographics.csv")
+
+        # Skip if the Demographics file is missing
+        if not os.path.exists(demo_path):
+            continue
+
+        try:
+            # 1. Read the vertical Demographics file
+            df = pd.read_csv(demo_path)
+
+            # Standardize strings to avoid hidden spaces messing up column names
+            if 'Info' in df.columns:
+                df['Info'] = df['Info'].astype(str).str.strip()
+
+            # 2. Transpose the data (flip rows into columns)
+            df_transposed = df.set_index('Info').T
+
+            # 3. Add the Participant ID (the folder name) as the very first column
+            df_transposed.insert(0, 'Participant ID', folder_name)
+
+            # Clean up the index so it doesn't say "Value" on the left side
+            df_transposed = df_transposed.reset_index(drop=True)
+
+            # 4. Add this participant's row to our master list
+            all_demographics.append(df_transposed)
+
+        except Exception as e:
+            print(f"❌ Error processing folder {folder_name}: {e}")
+
+    # 5. Combine all participants into one massive dataset and save it
+    if all_demographics:
+        merged_df = pd.concat(all_demographics, ignore_index=True)
+
+        # --- CHANGED HERE: Save directly inside the recording_directory ---
+        output_file = os.path.join(recording_directory, 'Demographics all.csv')
+
+        merged_df.to_csv(output_file, index=False)
+        print(f"✅ Successfully merged all demographics into: {output_file}")
+    else:
+        print("⚠️ No valid Demographics files were found to merge.")
+
+
 def rename_and_remove_columns_rows(recording_directory, questionnaire_directory):
     cols_to_remove_perception_results = ['Unnamed: 0', 'index', 'interval_number', 'is_dynamic_obstacle_present',
                                          'right_index_button', 'left_index_button', 'right_thumbstick_x',
@@ -616,7 +855,7 @@ def rename_and_remove_columns_rows(recording_directory, questionnaire_directory)
     cols_to_rename_raw_exp_logs_new = ['Timestamp', 'Trial number', 'Angle', 'Distance', 'Modality',
                                        'Left index but', 'Right index but', 'Thumbstick x', 'Thumbstick y',
                                        'Number of collision',
-                                       'Avatar positio', 'Head rotation', 'Collision position','Difficulty']
+                                       'Camera position', 'Head rotation', 'Collision position','Difficulty']
 
     cols_to_rename_perception_results_old = ['timestamp','trial_number', 'degree', 'degree_perceived', 'level', 'level_perceived',
                                              'feedback_modality', 'relative_timestamp', 'voice_start', 'voice_end',
@@ -642,11 +881,16 @@ def rename_and_remove_columns_rows(recording_directory, questionnaire_directory)
     )
 
     change_format_xlsx_to_csv(recording_directory)
+
+    remove_nondominant_ind_but_col(recording_directory)
+
+    merge_raw_perception(recording_directory)
+    rename_values(recording_directory)
+
+
     cols_to_remove_que_final = ['نام و نام خانوادگی:', 'ایمیل:', 'تاریخ شروع', 'تاریخ اتمام', 'پاسخنامه', 'شناسه پاسخ دهنده']
     cols_to_remove_que_mid = cols_to_remove_que_final
-
     remove_cols_ques_mid_final(questionnaire_directory, cols_to_remove_que_mid, cols_to_remove_que_final)
-
     process_final_questionnaire(questionnaire_directory)
     process_mid_questionnaire(questionnaire_directory)
 
