@@ -11,8 +11,11 @@ if __name__ == "__main__":
     # find_problematic_recordings(directory_path)
     # remove_specific_spreadsheets(directory_path, dry_run=True)
     # filter_and_copy_spreadsheets(recording_directory, output_directory_path)
+
     anonymize_folders(recording_directory, questionnaire_directory)
     rename_and_remove_columns_rows(recording_directory, questionnaire_directory)
-
     merge_demographics(recording_directory)
+    update_demographics_values(recording_directory)
+    update_setup_participant_ids()
+    update_demographics_values(recording_directory)
     pass
