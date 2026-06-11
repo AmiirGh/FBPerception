@@ -310,7 +310,7 @@ def process_recording_files(
 
             df2 = pd.read_csv(file2)
             df2 = df2.drop(columns=cols_to_remove_2, errors="ignore")
-
+            df2 = df2[df2["interval_number"] != 217]
             new_file2 = os.path.join(folder_path, f"{rec_data_new_name}.csv")
             df2.to_csv(new_file2, index=False)
 
