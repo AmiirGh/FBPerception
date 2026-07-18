@@ -11,6 +11,14 @@ import time
 import matplotlib.lines as mlines
 from matplotlib.lines import Line2D
 from scipy.interpolate import make_interp_spline
+from scipy.stats import spearmanr
+from sklearn.preprocessing import StandardScaler
+import scipy.cluster.hierarchy as sch
+from scipy.stats import pearsonr
+from scipy.stats import friedmanchisquare, wilcoxon
+from scipy.stats import mannwhitneyu
+from itertools import combinations
+from sklearn.cluster import AgglomerativeClustering
 
 def get_full_df_list():
     main_dir = './data'
@@ -39,7 +47,7 @@ def extract_dynamic_obstacle_trials(df):
     """
     Detects rising edge in 'is_dynamic_obstacle_present' column and returns a DataFrame
     with only the valid perception rows (where the dynamic obstacle state rises from False to True).
-    The feedback_modality is taken from the row immediately after the rise.
+    The Modality is taken from the row immediately after the rise.
     """
     df = df.copy()
 
@@ -52,9 +60,9 @@ def extract_dynamic_obstacle_trials(df):
         & ~df["is_dynamic_obstacle_present"].shift(1, fill_value=False)
     )
 
-    # Set feedback_modality from the next row
-    df.loc[df["dynamic_rise"], "feedback_modality"] = (
-        df["feedback_modality"].shift(-1)
+    # Set Modality from the next row
+    df.loc[df["dynamic_rise"], "Modality"] = (
+        df["Modality"].shift(-1)
     )
 
     # Keep only valid perception rows
@@ -71,24 +79,31 @@ def get_file_names(csv_files):
     return filenames
 
 
-def get_subjects_data_trials_df(subject_names, subjects_data_path):
+def get_perception_results_df(data_path):
     subjects_data_trials = {}
-    for s_n in subject_names:
-        trials_path = os.path.join(subjects_data_path, s_n, f"{s_n}_cleaned.xlsx")
-        try:
-            trials_data = pd.read_excel(trials_path)
-        except: pass
-        subjects_data_trials[s_n] = trials_data
+
+    for folder_name in sorted(os.listdir(data_path)):
+        folder_path = os.path.join(data_path, folder_name)
+
+        if not os.path.isdir(folder_path):
+            continue
+        csv_path = os.path.join(folder_path, "Perception results.csv")
+        trials_data = pd.read_csv(csv_path)
+        subjects_data_trials[folder_name] = trials_data
+
     return subjects_data_trials
 
-
-def get_subjects_data_full_df(subject_names, subjects_data_path):
+def get_experiment_logs_df(data_path):
     subjects_data_full = {}
 
-    for s_n in subject_names:
-        full_path = os.path.join(subjects_data_path, s_n, f"received_data_{s_n}.csv")
-        full_data = pd.read_csv(full_path)
-        subjects_data_full[s_n] = full_data
+    for folder_name in sorted(os.listdir(data_path)):
+        folder_path = os.path.join(data_path, folder_name)
+        if not os.path.isdir(folder_path):
+            continue
+        csv_path = os.path.join(folder_path, "Experiment logs.csv")
+        trials_data = pd.read_csv(csv_path)
+        subjects_data_full[folder_name] = trials_data
+
     return subjects_data_full
 
 
@@ -112,15 +127,15 @@ def extract_collision_modality(df, trials_df, start_offset=24, end_offset=48):
     """
     df = df.copy().reset_index(drop=True)
 
-    df["is_dynamic_obstacle_present"] = df["is_dynamic_obstacle_present"].astype(bool)
+    df["is_dynamic_obstacle_present"] = ~df["Modality"].isin([0, "0"])
 
     df["dynamic_rise"] = (
             df["is_dynamic_obstacle_present"] &
             ~df["is_dynamic_obstacle_present"].shift(1, fill_value=False)
     )
 
-    df.loc[df["dynamic_rise"], "feedback_modality"] = (
-        df["feedback_modality"].shift(-1)
+    df.loc[df["dynamic_rise"], "Modality"] = (
+        df["Modality"].shift(-1)
     )
 
     trials = df[df["dynamic_rise"]].copy()
@@ -129,14 +144,14 @@ def extract_collision_modality(df, trials_df, start_offset=24, end_offset=48):
 
     for idx in trials.index:
         # 1. Identify which trial this is in the continuous data
-        current_trial_num = df.loc[idx, "trial_number"]
+        current_trial_num = df.loc[idx, "Trial number"]
 
         # 2. Look up this exact trial in the subjects_data_trials dataframe
-        matching_trial = trials_df[trials_df["trial_number"] == current_trial_num]
+        matching_trial = trials_df[trials_df["Trial number"] == current_trial_num]
 
         # 3. Check if the trial was missed
         if not matching_trial.empty:
-            deg_perceived = matching_trial["degree_perceived"].iloc[0]
+            deg_perceived = matching_trial["Perceived angle"].iloc[0]
             if deg_perceived == 0 or deg_perceived == -1:
                 continue
         else:
@@ -150,22 +165,21 @@ def extract_collision_modality(df, trials_df, start_offset=24, end_offset=48):
         if start_idx >= len(df):
             continue
 
-        start_collision = df.loc[start_idx, "number_of_collision"]
-        end_collision = df.loc[end_idx, "number_of_collision"]
+        start_collision = df.loc[start_idx, "Number of collision"]
+        end_collision = df.loc[end_idx, "Number of collision"]
 
         collisions_in_window = end_collision - start_collision
 
         collision_results.append({
-            "feedback_modality": df.loc[idx, "feedback_modality"],
+            "Modality": df.loc[idx, "Modality"],
             "collisions": collisions_in_window
         })
 
     return pd.DataFrame(collision_results)
 
 
-
 def get_all_miss_counts(subjects_data_trials):
-    modalities = ['audio', 'haptic', 'visual']
+    modalities = ['auditory', 'haptic', 'visual']
     all_counts = []
 
     # Iterate through the dictionary (subject_name is the key, df is the dataframe)
@@ -174,18 +188,18 @@ def get_all_miss_counts(subjects_data_trials):
         if df is None or df.empty:
             continue
 
-        # Define a miss based on the data description (degree_perceived == 0)
-        df_miss = df[df['degree_perceived'] == 0]
+        # Define a miss based on the data description (Perceived angle == 0)
+        df_miss = df[df['Perceived angle'] == 0]
 
-        counts = (df_miss['feedback_modality'].value_counts().reindex(modalities, fill_value=0).reset_index())
+        counts = (df_miss['Modality'].value_counts().reindex(modalities, fill_value=0).reset_index())
 
-        counts.columns = ['feedback_modality', 'count']
+        counts.columns = ['Modality', 'count']
         counts["subject"] = subject_name
 
         all_counts.append(counts)
 
     if all_counts: all_counts_df = pd.concat(all_counts, ignore_index=True)
-    else: all_counts_df = pd.DataFrame(columns=['feedback_modality', 'count', 'subject'])
+    else: all_counts_df = pd.DataFrame(columns=['Modality', 'count', 'subject'])
 
     return all_counts_df
 
@@ -194,10 +208,10 @@ def plot_all_miss_counts(all_miss_counts):
     fig, ax = plt.subplots(figsize=(8, 6))
 
     # Boxplot
-    sns.boxplot(data=all_miss_counts, x='feedback_modality', y='count', palette="Set2", ax=ax)
+    sns.boxplot(data=all_miss_counts, x='Modality', y='count', palette="Set2", ax=ax)
 
     # Stripplot to show individual subject data points
-    # sns.stripplot(data=all_miss_counts, x="feedback_modality", y="count", color="black", alpha=0.5, ax=ax)
+    # sns.stripplot(data=all_miss_counts, x="Modality", y="count", color="black", alpha=0.5, ax=ax)
 
     # Labels and Titles
     ax.set_xlabel('Feedback Modality')
@@ -210,7 +224,7 @@ def plot_all_miss_counts(all_miss_counts):
 
 
 # def is_normal(var):
-#     statistic, p_value = stats.shapiro(audio)
+#     statistic, p_value = stats.shapiro(auditory)
 
 '''
 checks if the values in the variable are normal or not
@@ -221,10 +235,10 @@ def is_normal(dist_values):
 
 
 def get_p_val_miss_counts(df):
-    v_a_miss_counts_p_val = get_pairwise_p_value(df[df['feedback_modality'] == 'visual']['count'],
-                                                 df[df['feedback_modality'] == 'audio']['count'])
-    v_h_miss_counts_p_val = get_pairwise_p_value(df[df['feedback_modality'] == 'visual']['count'],
-                                                 df[df['feedback_modality'] == 'haptic']['count'])
+    v_a_miss_counts_p_val = get_pairwise_p_value(df[df['Modality'] == 'visual']['count'],
+                                                 df[df['Modality'] == 'auditory']['count'])
+    v_h_miss_counts_p_val = get_pairwise_p_value(df[df['Modality'] == 'visual']['count'],
+                                                 df[df['Modality'] == 'haptic']['count'])
     return v_a_miss_counts_p_val, v_h_miss_counts_p_val
 
 
@@ -242,28 +256,28 @@ def get_all_miss_counts_outliers(all_miss_counts, min_val):
 
 
 def get_miss_rates_by_generation_rate(subjects_data_trials):
-    modalities = ['visual', 'haptic', 'audio']
+    modalities = ['visual', 'haptic', 'auditory']
     all_counts = []
 
     for subject_name, df in subjects_data_trials.items():
         if df is None or df.empty:
             continue
 
-        df_miss = df[df['degree_perceived'] == 0]
+        df_miss = df[df['Perceived angle'] == 0]
 
         counts = (
-            df_miss.groupby(['generation_rate', 'feedback_modality'])
+            df_miss.groupby(['generation_rate', 'Modality'])
             .size()
             .reset_index(name='count')
         )
 
         multi_index = pd.MultiIndex.from_product(
             [df['generation_rate'].unique(), modalities],
-            names=['generation_rate', 'feedback_modality']
+            names=['generation_rate', 'Modality']
         )
 
         counts = (
-            counts.set_index(['generation_rate', 'feedback_modality'])
+            counts.set_index(['generation_rate', 'Modality'])
             .reindex(multi_index, fill_value=0)
             .reset_index()
         )
@@ -275,7 +289,7 @@ def get_miss_rates_by_generation_rate(subjects_data_trials):
         all_counts_df = pd.concat(all_counts, ignore_index=True)
         rates = sorted(all_counts_df["generation_rate"].unique())
     else:
-        all_counts_df = pd.DataFrame(columns=['generation_rate', 'feedback_modality', 'count', 'subject'])
+        all_counts_df = pd.DataFrame(columns=['generation_rate', 'Modality', 'count', 'subject'])
         rates = []
     return rates, all_counts_df
 
@@ -285,17 +299,17 @@ def get_miss_rates_by_generation_rate(subjects_data_trials):
 
 
 def get_p_val_miss_counts_by_gr(df, gr):
-    v_15 = df[(df['feedback_modality'] == 'visual') & (df['generation_rate'] == gr[0])]['count']
-    v_20 = df[(df['feedback_modality'] == 'visual') & (df['generation_rate'] == gr[1])]['count']
-    v_25 = df[(df['feedback_modality'] == 'visual') & (df['generation_rate'] == gr[2])]['count']
+    v_15 = df[(df['Modality'] == 'visual') & (df['generation_rate'] == gr[0])]['count']
+    v_20 = df[(df['Modality'] == 'visual') & (df['generation_rate'] == gr[1])]['count']
+    v_25 = df[(df['Modality'] == 'visual') & (df['generation_rate'] == gr[2])]['count']
 
-    a_15 = df[(df['feedback_modality'] == 'audio') & (df['generation_rate'] == gr[0])]['count']
-    a_20 = df[(df['feedback_modality'] == 'audio') & (df['generation_rate'] == gr[1])]['count']
-    a_25 = df[(df['feedback_modality'] == 'audio') & (df['generation_rate'] == gr[2])]['count']
+    a_15 = df[(df['Modality'] == 'auditory') & (df['generation_rate'] == gr[0])]['count']
+    a_20 = df[(df['Modality'] == 'auditory') & (df['generation_rate'] == gr[1])]['count']
+    a_25 = df[(df['Modality'] == 'auditory') & (df['generation_rate'] == gr[2])]['count']
 
-    h_15 = df[(df['feedback_modality'] == 'haptic') & (df['generation_rate'] == gr[0])]['count']
-    h_20 = df[(df['feedback_modality'] == 'haptic') & (df['generation_rate'] == gr[1])]['count']
-    h_25 = df[(df['feedback_modality'] == 'haptic') & (df['generation_rate'] == gr[2])]['count']
+    h_15 = df[(df['Modality'] == 'haptic') & (df['generation_rate'] == gr[0])]['count']
+    h_20 = df[(df['Modality'] == 'haptic') & (df['generation_rate'] == gr[1])]['count']
+    h_25 = df[(df['Modality'] == 'haptic') & (df['generation_rate'] == gr[2])]['count']
 
     v_15_v_25_p_val = get_pairwise_p_value(v_15, v_25)
     v_15_v_20_p_val = get_pairwise_p_value(v_15, v_20)
@@ -305,17 +319,17 @@ def get_p_val_miss_counts_by_gr(df, gr):
 
 
 def get_p_val_accuracy(accuracy_degree_all, accuracy_level_all, accuracy_full_all):
-    v_deg = accuracy_degree_all[accuracy_degree_all['feedback_modality'] == 'visual']['accuracy_degree']
-    v_lvl = accuracy_level_all[accuracy_level_all['feedback_modality'] == 'visual']['accuracy_level']
-    v_full = accuracy_full_all[accuracy_full_all['feedback_modality'] == 'visual']['accuracy_full']
+    v_deg = accuracy_degree_all[accuracy_degree_all['Modality'] == 'visual']['accuracy_degree']
+    v_lvl = accuracy_level_all[accuracy_level_all['Modality'] == 'visual']['accuracy_level']
+    v_full = accuracy_full_all[accuracy_full_all['Modality'] == 'visual']['accuracy_full']
 
-    a_deg = accuracy_degree_all[accuracy_degree_all['feedback_modality'] == 'audio']['accuracy_degree']
-    a_lvl = accuracy_level_all[accuracy_level_all['feedback_modality'] == 'audio']['accuracy_level']
-    a_full = accuracy_full_all[accuracy_full_all['feedback_modality'] == 'audio']['accuracy_full']
+    a_deg = accuracy_degree_all[accuracy_degree_all['Modality'] == 'auditory']['accuracy_degree']
+    a_lvl = accuracy_level_all[accuracy_level_all['Modality'] == 'auditory']['accuracy_level']
+    a_full = accuracy_full_all[accuracy_full_all['Modality'] == 'auditory']['accuracy_full']
 
-    h_deg = accuracy_degree_all[accuracy_degree_all['feedback_modality'] == 'haptic']['accuracy_degree']
-    h_lvl = accuracy_level_all[accuracy_level_all['feedback_modality'] == 'haptic']['accuracy_level']
-    h_full = accuracy_full_all[accuracy_full_all['feedback_modality'] == 'haptic']['accuracy_full']
+    h_deg = accuracy_degree_all[accuracy_degree_all['Modality'] == 'haptic']['accuracy_degree']
+    h_lvl = accuracy_level_all[accuracy_level_all['Modality'] == 'haptic']['accuracy_level']
+    h_full = accuracy_full_all[accuracy_full_all['Modality'] == 'haptic']['accuracy_full']
 
     a_full_h_full_p_val = get_pairwise_p_value(a_full, h_full)
     a_deg_h_deg_p_val = get_pairwise_p_value(a_deg, h_deg)
@@ -325,41 +339,41 @@ def get_p_val_accuracy(accuracy_degree_all, accuracy_level_all, accuracy_full_al
 
 
 def get_p_val_accuracy_by_gr(df_deg, df_lvl, df_full, gr):
-    v_15_deg = df_deg[(df_deg['feedback_modality'] == 'visual') & (df_deg['generation_rate'] == gr[0])]['accuracy_degree']
-    v_15_lvl = df_lvl[(df_lvl['feedback_modality'] == 'visual') & (df_lvl['generation_rate'] == gr[0])]['accuracy_level']
-    v_15_ful = df_full[(df_full['feedback_modality'] == 'visual') & (df_full['generation_rate'] == gr[0])]['accuracy_full']
+    v_15_deg = df_deg[(df_deg['Modality'] == 'visual') & (df_deg['generation_rate'] == gr[0])]['accuracy_degree']
+    v_15_lvl = df_lvl[(df_lvl['Modality'] == 'visual') & (df_lvl['generation_rate'] == gr[0])]['accuracy_level']
+    v_15_ful = df_full[(df_full['Modality'] == 'visual') & (df_full['generation_rate'] == gr[0])]['accuracy_full']
 
-    v_20_deg = df_deg[(df_deg['feedback_modality'] == 'visual') & (df_deg['generation_rate'] == gr[1])]['accuracy_degree']
-    v_20_lvl = df_lvl[(df_lvl['feedback_modality'] == 'visual') & (df_lvl['generation_rate'] == gr[1])]['accuracy_level']
-    v_20_ful = df_full[(df_full['feedback_modality'] == 'visual') & (df_full['generation_rate'] == gr[1])]['accuracy_full']
+    v_20_deg = df_deg[(df_deg['Modality'] == 'visual') & (df_deg['generation_rate'] == gr[1])]['accuracy_degree']
+    v_20_lvl = df_lvl[(df_lvl['Modality'] == 'visual') & (df_lvl['generation_rate'] == gr[1])]['accuracy_level']
+    v_20_ful = df_full[(df_full['Modality'] == 'visual') & (df_full['generation_rate'] == gr[1])]['accuracy_full']
 
-    v_25_deg = df_deg[(df_deg['feedback_modality'] == 'visual') & (df_deg['generation_rate'] == gr[2])]['accuracy_degree']
-    v_25_lvl = df_lvl[(df_lvl['feedback_modality'] == 'visual') & (df_lvl['generation_rate'] == gr[2])]['accuracy_level']
-    v_25_ful = df_full[(df_full['feedback_modality'] == 'visual') & (df_full['generation_rate'] == gr[2])]['accuracy_full']
+    v_25_deg = df_deg[(df_deg['Modality'] == 'visual') & (df_deg['generation_rate'] == gr[2])]['accuracy_degree']
+    v_25_lvl = df_lvl[(df_lvl['Modality'] == 'visual') & (df_lvl['generation_rate'] == gr[2])]['accuracy_level']
+    v_25_ful = df_full[(df_full['Modality'] == 'visual') & (df_full['generation_rate'] == gr[2])]['accuracy_full']
     #__________________________________
-    a_15_deg = df_deg[(df_deg['feedback_modality'] == 'audio') & (df_deg['generation_rate'] == gr[0])]['accuracy_degree']
-    a_15_lvl = df_lvl[(df_lvl['feedback_modality'] == 'audio') & (df_lvl['generation_rate'] == gr[0])]['accuracy_level']
-    a_15_ful = df_full[(df_full['feedback_modality'] == 'audio') & (df_full['generation_rate'] == gr[0])]['accuracy_full']
+    a_15_deg = df_deg[(df_deg['Modality'] == 'auditory') & (df_deg['generation_rate'] == gr[0])]['accuracy_degree']
+    a_15_lvl = df_lvl[(df_lvl['Modality'] == 'auditory') & (df_lvl['generation_rate'] == gr[0])]['accuracy_level']
+    a_15_ful = df_full[(df_full['Modality'] == 'auditory') & (df_full['generation_rate'] == gr[0])]['accuracy_full']
 
-    a_20_deg = df_deg[(df_deg['feedback_modality'] == 'audio') & (df_deg['generation_rate'] == gr[1])]['accuracy_degree']
-    a_20_lvl = df_lvl[(df_lvl['feedback_modality'] == 'audio') & (df_lvl['generation_rate'] == gr[1])]['accuracy_level']
-    a_20_ful = df_full[(df_full['feedback_modality'] == 'audio') & (df_full['generation_rate'] == gr[1])]['accuracy_full']
+    a_20_deg = df_deg[(df_deg['Modality'] == 'auditory') & (df_deg['generation_rate'] == gr[1])]['accuracy_degree']
+    a_20_lvl = df_lvl[(df_lvl['Modality'] == 'auditory') & (df_lvl['generation_rate'] == gr[1])]['accuracy_level']
+    a_20_ful = df_full[(df_full['Modality'] == 'auditory') & (df_full['generation_rate'] == gr[1])]['accuracy_full']
 
-    a_25_deg = df_deg[(df_deg['feedback_modality'] == 'audio') & (df_deg['generation_rate'] == gr[2])]['accuracy_degree']
-    a_25_lvl = df_lvl[(df_lvl['feedback_modality'] == 'audio') & (df_lvl['generation_rate'] == gr[2])]['accuracy_level']
-    a_25_ful = df_full[(df_full['feedback_modality'] == 'audio') & (df_full['generation_rate'] == gr[2])]['accuracy_full']
+    a_25_deg = df_deg[(df_deg['Modality'] == 'auditory') & (df_deg['generation_rate'] == gr[2])]['accuracy_degree']
+    a_25_lvl = df_lvl[(df_lvl['Modality'] == 'auditory') & (df_lvl['generation_rate'] == gr[2])]['accuracy_level']
+    a_25_ful = df_full[(df_full['Modality'] == 'auditory') & (df_full['generation_rate'] == gr[2])]['accuracy_full']
     # __________________________________
-    h_15_deg = df_deg[(df_deg['feedback_modality'] == 'haptic') & (df_deg['generation_rate'] == gr[0])]['accuracy_degree']
-    h_15_lvl = df_lvl[(df_lvl['feedback_modality'] == 'haptic') & (df_lvl['generation_rate'] == gr[0])]['accuracy_level']
-    h_15_ful = df_full[(df_full['feedback_modality'] == 'haptic') & (df_full['generation_rate'] == gr[0])]['accuracy_full']
+    h_15_deg = df_deg[(df_deg['Modality'] == 'haptic') & (df_deg['generation_rate'] == gr[0])]['accuracy_degree']
+    h_15_lvl = df_lvl[(df_lvl['Modality'] == 'haptic') & (df_lvl['generation_rate'] == gr[0])]['accuracy_level']
+    h_15_ful = df_full[(df_full['Modality'] == 'haptic') & (df_full['generation_rate'] == gr[0])]['accuracy_full']
 
-    h_20_deg = df_deg[(df_deg['feedback_modality'] == 'haptic') & (df_deg['generation_rate'] == gr[1])]['accuracy_degree']
-    h_20_lvl = df_lvl[(df_lvl['feedback_modality'] == 'haptic') & (df_lvl['generation_rate'] == gr[1])]['accuracy_level']
-    h_20_ful = df_full[(df_full['feedback_modality'] == 'haptic') & (df_full['generation_rate'] == gr[1])]['accuracy_full']
+    h_20_deg = df_deg[(df_deg['Modality'] == 'haptic') & (df_deg['generation_rate'] == gr[1])]['accuracy_degree']
+    h_20_lvl = df_lvl[(df_lvl['Modality'] == 'haptic') & (df_lvl['generation_rate'] == gr[1])]['accuracy_level']
+    h_20_ful = df_full[(df_full['Modality'] == 'haptic') & (df_full['generation_rate'] == gr[1])]['accuracy_full']
 
-    h_25_deg = df_deg[(df_deg['feedback_modality'] == 'haptic') & (df_deg['generation_rate'] == gr[2])]['accuracy_degree']
-    h_25_lvl = df_lvl[(df_lvl['feedback_modality'] == 'haptic') & (df_lvl['generation_rate'] == gr[2])]['accuracy_level']
-    h_25_ful = df_full[(df_full['feedback_modality'] == 'haptic') & (df_full['generation_rate'] == gr[2])]['accuracy_full']
+    h_25_deg = df_deg[(df_deg['Modality'] == 'haptic') & (df_deg['generation_rate'] == gr[2])]['accuracy_degree']
+    h_25_lvl = df_lvl[(df_lvl['Modality'] == 'haptic') & (df_lvl['generation_rate'] == gr[2])]['accuracy_level']
+    h_25_ful = df_full[(df_full['Modality'] == 'haptic') & (df_full['generation_rate'] == gr[2])]['accuracy_full']
 
     a_15_deg_h_15_deg_p_val = get_pairwise_p_value(a_15_deg, h_15_deg)
     a_15_lvl_h_15_lvl_p_val = get_pairwise_p_value(a_15_lvl, h_15_lvl)
@@ -386,14 +400,14 @@ def plot_all_miss_counts_by_generation_rate(miss_rates_by_gr, all_miss_counts_df
     if len(miss_rates_by_gr) == 1:
         axes = [axes]
 
-    modality_order = ['audio', 'haptic', 'visual']
+    modality_order = ['auditory', 'haptic', 'visual']
     m=0
     for i, (ax, rate) in enumerate(zip(axes, miss_rates_by_gr)):
         df_rate = all_miss_counts_df[all_miss_counts_df["generation_rate"] == rate]
         m+=1
         sns.boxplot(
             data=df_rate,
-            x='feedback_modality',
+            x='Modality',
             y='count',
             order=modality_order,
             palette="Set2",
@@ -403,7 +417,7 @@ def plot_all_miss_counts_by_generation_rate(miss_rates_by_gr, all_miss_counts_df
 
         # sns.stripplot(
         #     data=df_rate,
-        #     x='feedback_modality',
+        #     x='Modality',
         #     y='count',
         #     order=modality_order,
         #     color='black',
@@ -431,7 +445,7 @@ def plot_all_miss_counts_by_generation_rate(miss_rates_by_gr, all_miss_counts_df
 
 
 def is_accuracy_degree(row):
-    perceived = row["degree_perceived"]
+    perceived = row["Perceived angle"]
     try:
         return int(perceived) == row["degree"]
     except:
@@ -440,7 +454,7 @@ def is_accuracy_degree(row):
 
 def is_accuracy_level(row):
     level = row["level"]
-    perceived = row["level_perceived"]
+    perceived = row["Perceived distance"]
 
     try:
         return int(perceived) == int(level)
@@ -461,7 +475,7 @@ def get_accuracy_rates(subjects_data_trials):
 
         # --- NEW CODE: Filter out invalid data ---
         # Convert to numeric safely to catch both int 0 and string "0", then filter
-        numeric_perceived = pd.to_numeric(trials["degree_perceived"], errors="coerce")
+        numeric_perceived = pd.to_numeric(trials["Perceived angle"], errors="coerce")
         trials = trials[~numeric_perceived.isin([0, -1])]
 
         # If the dataframe is empty after filtering out 0s, skip to the next subject
@@ -473,17 +487,17 @@ def get_accuracy_rates(subjects_data_trials):
         trials["accuracy_level"] = trials.apply(is_accuracy_level, axis=1)
         trials["accuracy_full"] = trials["accuracy_degree"] & trials["accuracy_level"]
 
-        sr = (trials.groupby("feedback_modality")["accuracy_degree"].mean().reset_index())
+        sr = (trials.groupby("Modality")["accuracy_degree"].mean().reset_index())
         sr["accuracy_degree"] *= 100
         sr["subject"] = subject_name
         all_accuracy_degree.append(sr)
 
-        sl = (trials.groupby("feedback_modality")["accuracy_level"].mean().reset_index())
+        sl = (trials.groupby("Modality")["accuracy_level"].mean().reset_index())
         sl["accuracy_level"] *= 100
         sl["subject"] = subject_name
         all_accuracy_level.append(sl)
 
-        sf = (trials.groupby("feedback_modality")["accuracy_full"].mean().reset_index())
+        sf = (trials.groupby("Modality")["accuracy_full"].mean().reset_index())
         sf["accuracy_full"] *= 100
         sf["subject"] = subject_name
         all_accuracy_full.append(sf)
@@ -493,9 +507,9 @@ def get_accuracy_rates(subjects_data_trials):
         accuracy_level_all = pd.concat(all_accuracy_level, ignore_index=True)
         accuracy_full_all = pd.concat(all_accuracy_full, ignore_index=True)
     else:
-        accuracy_degree_all = pd.DataFrame(columns=["feedback_modality", "accuracy_degree", "subject"])
-        accuracy_level_all = pd.DataFrame(columns=["feedback_modality", "accuracy_level", "subject"])
-        accuracy_full_all = pd.DataFrame(columns=["feedback_modality", "accuracy_full", "subject"])
+        accuracy_degree_all = pd.DataFrame(columns=["Modality", "accuracy_degree", "subject"])
+        accuracy_level_all = pd.DataFrame(columns=["Modality", "accuracy_level", "subject"])
+        accuracy_full_all = pd.DataFrame(columns=["Modality", "accuracy_full", "subject"])
 
     return accuracy_degree_all, accuracy_level_all, accuracy_full_all
 
@@ -512,7 +526,7 @@ def plot_all_accuracy_rates(datasets):
     fig, axes = plt.subplots(1, 3, figsize=(18, 6), sharey=True)
 
     # Enforce a consistent order across all subplots so the bars don't jump around
-    modality_order = ['audio', 'haptic', 'visual']
+    modality_order = ['auditory', 'haptic', 'visual']
 
     for i, (ax, (data, y_col, y_title)) in enumerate(zip(axes, datasets)):
         # Check if the specific dataset is empty
@@ -523,7 +537,7 @@ def plot_all_accuracy_rates(datasets):
         # Boxplot
         sns.boxplot(
             data=data,
-            x="feedback_modality",
+            x="Modality",
             y=y_col,
             order=modality_order,
             palette="Set2",
@@ -573,7 +587,7 @@ def get_accuracy_rates_by_generation_rate(subjects_data_trials):
         # Calculate mean for degree accuracy grouped by generation rate and modality
         sr = (
             trials
-            .groupby(["generation_rate", "feedback_modality"])["accuracy_degree"]
+            .groupby(["generation_rate", "Modality"])["accuracy_degree"]
             .mean()
             .reset_index()
         )
@@ -584,7 +598,7 @@ def get_accuracy_rates_by_generation_rate(subjects_data_trials):
         # Calculate mean for level accuracy grouped by generation rate and modality
         sl = (
             trials
-            .groupby(["generation_rate", "feedback_modality"])["accuracy_level"]
+            .groupby(["generation_rate", "Modality"])["accuracy_level"]
             .mean()
             .reset_index()
         )
@@ -595,7 +609,7 @@ def get_accuracy_rates_by_generation_rate(subjects_data_trials):
         # Calculate mean for full accuracy grouped by generation rate and modality
         sf = (
             trials
-            .groupby(["generation_rate", "feedback_modality"])["accuracy_full"]
+            .groupby(["generation_rate", "Modality"])["accuracy_full"]
             .mean()
             .reset_index()
         )
@@ -610,9 +624,9 @@ def get_accuracy_rates_by_generation_rate(subjects_data_trials):
         accuracy_full_all = pd.concat(all_accuracy_full, ignore_index=True)
     else:
         # Fallback empty DataFrames if the dictionary was totally empty
-        accuracy_degree_all = pd.DataFrame(columns=["generation_rate", "feedback_modality", "accuracy_degree", "subject"])
-        accuracy_level_all = pd.DataFrame(columns=["generation_rate", "feedback_modality", "accuracy_level", "subject"])
-        accuracy_full_all = pd.DataFrame(columns=["generation_rate", "feedback_modality", "accuracy_full", "subject"])
+        accuracy_degree_all = pd.DataFrame(columns=["generation_rate", "Modality", "accuracy_degree", "subject"])
+        accuracy_level_all = pd.DataFrame(columns=["generation_rate", "Modality", "accuracy_level", "subject"])
+        accuracy_full_all = pd.DataFrame(columns=["generation_rate", "Modality", "accuracy_full", "subject"])
 
     return accuracy_degree_all, accuracy_level_all, accuracy_full_all
 
@@ -626,7 +640,7 @@ def plot_accuracy_rates_by_generation_rate(datasets):
     sns.set_theme(style="whitegrid")
 
     # Enforce consistent order across all subplots
-    modality_order = ['audio', 'haptic', 'visual']
+    modality_order = ['auditory', 'haptic', 'visual']
 
     # Extract and sort unique generation rates from the first dataset
     generation_rates = sorted(datasets[0][0]["generation_rate"].unique())
@@ -653,7 +667,7 @@ def plot_accuracy_rates_by_generation_rate(datasets):
             # Boxplot
             sns.boxplot(
                 data=data_gr,
-                x="feedback_modality",
+                x="Modality",
                 y=y_col,
                 order=modality_order,
                 palette="Set2",
@@ -663,7 +677,7 @@ def plot_accuracy_rates_by_generation_rate(datasets):
             # Overlay individual data points for transparency
             # sns.stripplot(
             #     data=data_gr,
-            #     x="feedback_modality",
+            #     x="Modality",
             #     y=y_col,
             #     order=modality_order,
             #     color="black",
@@ -894,7 +908,7 @@ def calc_no_collisions_by_fbmod_for_time_window(subjects_data_full, subjects_dat
         if results.empty:
             continue
 
-        summary = (results.groupby("feedback_modality")["collisions"].sum().reset_index())
+        summary = (results.groupby("Modality")["collisions"].sum().reset_index())
         summary["subject"] = subject_name
         all_results.append(summary)
 
@@ -904,10 +918,9 @@ def calc_no_collisions_by_fbmod_for_time_window(subjects_data_full, subjects_dat
     all_summary = pd.concat(all_results, ignore_index=True)
     return all_summary
 
-
 def plot_collision_time_windows(all_summary_0_2, all_summary_2_4, window_1, window_2):
     """
-    Plots sequential box plots for Audio, Haptic, and Visual collisions
+    Plots sequential box plots for auditory, Haptic, and Visual collisions
     across 0-2s and 2-4s, grouped by Modality color (Set2).
     """
     # 1. Make copies and label the time windows
@@ -922,11 +935,11 @@ def plot_collision_time_windows(all_summary_0_2, all_summary_2_4, window_1, wind
 
     # 3. Create a unified X-axis category combining Modality and Time
     # This allows us to map the color strictly to Modality while keeping all 6 boxes separate
-    combined_df['Category'] = combined_df['feedback_modality'] + '\n' + combined_df['Time Window']
+    combined_df['Category'] = combined_df['Modality'] + '\n' + combined_df['Time Window']
 
     # 4. Define the exact sequential order you requested
     order = [
-        f'audio\n{window_1[0]}-{window_1[1]}s', f'audio\n{window_2[0]}-{window_2[1]}s',
+        f'auditory\n{window_1[0]}-{window_1[1]}s', f'auditory\n{window_2[0]}-{window_2[1]}s',
         f'haptic\n{window_1[0]}-{window_1[1]}s', f'haptic\n{window_2[0]}-{window_2[1]}s',
         f'visual\n{window_1[0]}-{window_1[1]}s', f'visual\n{window_2[0]}-{window_2[1]}s'
     ]
@@ -938,7 +951,7 @@ def plot_collision_time_windows(all_summary_0_2, all_summary_2_4, window_1, wind
         data=combined_df,
         x='Category',
         y='collisions',
-        hue='feedback_modality',  # Forces the color to be tied to the modality
+        hue='Modality',  # Forces the color to be tied to the modality
         order=order,
         palette='Set2',  # Applying the Set2 palette
         dodge=False,  # No dodging needed since each X-tick only has 1 box
@@ -957,11 +970,16 @@ def plot_collision_time_windows(all_summary_0_2, all_summary_2_4, window_1, wind
     plt.show()
 
 
-def plot_multiple_collision_time_windows(windows_list, subjects_data_full, subjects_data_trials):
+def plot_multiple_collision_time_windows(windows_list, subjects_data_full, subjects_data_trials, axes=None):
     """
     Plots stacked box plots (3 rows, 1 column) for Audio, Haptic, and Visual
     collisions across time windows, with smooth mean curves overlaid.
+
+    If `axes` (an array-like of 3 Matplotlib Axes) is provided, the plots are
+    drawn onto those axes instead of creating a new figure. This allows the
+    function to be embedded as a subplot block inside a larger dashboard.
     """
+    standalone = axes is None
     # 2. Run the calculation in a loop and combine the results
     window_summaries = []
     for w in windows_list:
@@ -982,21 +1000,22 @@ def plot_multiple_collision_time_windows(windows_list, subjects_data_full, subje
 
     # 1. Define the exact order of time windows
     time_order = [f"{w[0]}-{w[1]}s" for w in windows_list]
-    modalities = ['audio', 'haptic', 'visual']
+    modalities = ['auditory', 'haptic', 'visual']
 
     # 2. Extract colors from Set2 to match your previous styling
     palette = sns.color_palette('Set2')
-    color_map = {'audio': palette[0], 'haptic': palette[1], 'visual': palette[2]}
+    color_map = {'auditory': palette[0], 'haptic': palette[1], 'visual': palette[2]}
 
     # 3. Create a vertically stacked grid (3 rows, 1 col)
     # sharex and sharey ensure the scales match perfectly across all 3 modalities
-    fig, axes = plt.subplots(3, 1, figsize=(14, 12), sharex=True, sharey=True)
+    if standalone:
+        fig, axes = plt.subplots(3, 1, figsize=(14, 12), sharex=True, sharey=True)
 
     for i, mod in enumerate(modalities):
         ax = axes[i]
 
         # Isolate the data for the current modality
-        mod_data = combined_all_windows[combined_all_windows['feedback_modality'] == mod]
+        mod_data = combined_all_windows[combined_all_windows['Modality'] == mod]
 
         # 4. Plot Boxplot on the specific axis (ax)
         sns.boxplot(
@@ -1034,7 +1053,7 @@ def plot_multiple_collision_time_windows(windows_list, subjects_data_full, subje
         ax.plot(x_smooth, y_smooth, color=color_map[mod], linewidth=3.5, zorder=4)
 
         # 7. Customize each subplot's aesthetics
-        ax.set_title(f'{mod.capitalize()} Modality', fontsize=13, fontweight='bold')
+        ax.set_title(f'{mod.capitalize()}', fontsize=13, fontweight='bold')
         ax.set_ylabel('Collisions', fontsize=11)
         ax.grid(axis='y', linestyle='--', alpha=0.7)
 
@@ -1045,17 +1064,17 @@ def plot_multiple_collision_time_windows(windows_list, subjects_data_full, subje
             ax.set_xlabel('')
 
     # 8. Final Layout Adjustments
-    fig.suptitle('Collisions Over Time by Modality (0s to 5s)', fontsize=16, y=0.98)
-    plt.tight_layout()
-    plt.show()
-
+    # fig.suptitle('Collisions Over Time by Modality (0s to 5s)', fontsize=16, y=0.98)
+    if standalone:
+        plt.tight_layout()
+        plt.show()
 
 def compare_time_windows_significance(all_summary_0_2, all_summary_2_4):
     """
     Calculates the p-value for the difference in collisions between
     the 0-2s and 2-4s time windows for each feedback modality.
     """
-    modalities = ['audio', 'haptic', 'visual']
+    modalities = ['auditory', 'haptic', 'visual']
     p_values = {}
 
     print("=" * 45)
@@ -1064,10 +1083,10 @@ def compare_time_windows_significance(all_summary_0_2, all_summary_2_4):
 
     for mod in modalities:
         # 1. Extract the collision counts for the current modality in the 0-2s window
-        data_0_2 = all_summary_0_2[all_summary_0_2['feedback_modality'] == mod]['collisions']
+        data_0_2 = all_summary_0_2[all_summary_0_2['Modality'] == mod]['collisions']
 
         # 2. Extract the collision counts for the current modality in the 2-4s window
-        data_2_4 = all_summary_2_4[all_summary_2_4['feedback_modality'] == mod]['collisions']
+        data_2_4 = all_summary_2_4[all_summary_2_4['Modality'] == mod]['collisions']
 
         # 3. Use your custom function to calculate the p-value
         p_val = get_pairwise_p_value(data_0_2, data_2_4)
@@ -1096,7 +1115,7 @@ def plot_no_collisions_by_fbmod_for_time_window(all_summary, start_sec, end_sec)
 
     fig, ax = plt.subplots()
 
-    sns.boxplot(data=all_summary, x="feedback_modality", y="collisions", hue="feedback_modality", palette="Set2",
+    sns.boxplot(data=all_summary, x="Modality", y="collisions", hue="Modality", palette="Set2",
         legend=False, ax=ax)
 
     ax.set_xlabel("Feedback Modality")
@@ -1107,9 +1126,9 @@ def plot_no_collisions_by_fbmod_for_time_window(all_summary, start_sec, end_sec)
 
 
 def no_col_by_fbmod_p_val_df(df):
-    v = df[df["feedback_modality"] == "visual"]['collisions']
-    a = df[df["feedback_modality"] == "audio"]['collisions']
-    h = df[df["feedback_modality"] == "haptic"]['collisions']
+    v = df[df["Modality"] == "visual"]['collisions']
+    a = df[df["Modality"] == "auditory"]['collisions']
+    h = df[df["Modality"] == "haptic"]['collisions']
     v_a_p_val = get_pairwise_p_value(v, a)
     v_h_p_val = get_pairwise_p_value(v, h)
     a_h_p_val = get_pairwise_p_value(a, h)
@@ -1250,16 +1269,16 @@ def final_coll_by_gr_p_val_df(final_collision_by_gr):
 #
 #     all_data = []
 #     palette = sns.color_palette('Set2')
-#     color_map = {'audio': palette[0], 'haptic': palette[1], 'visual': palette[2]}
+#     color_map = {'auditory': palette[0], 'haptic': palette[1], 'visual': palette[2]}
 #
 #     mod_color = color_map.get(fbmod, 'tab:blue')
 #     base_scatter_size = 18
 #     for subject_name, df in subjects_data_trials.items():
 #         if df is None or df.empty:
 #             continue
-#         df_mod = df[df["feedback_modality"] == fbmod].copy()
-#         df_mod = df_mod[df_mod["degree_perceived"] > 0]
-#         cols = ["degree", "level", "degree_perceived", "level_perceived"]
+#         df_mod = df[df["Modality"] == fbmod].copy()
+#         df_mod = df_mod[df_mod["Perceived angle"] > 0]
+#         cols = ["degree", "level", "Perceived angle", "Perceived distance"]
 #         all_data.append(df_mod[cols])
 #
 #     data = pd.concat(all_data, ignore_index=True)
@@ -1290,10 +1309,10 @@ def final_coll_by_gr_p_val_df(final_collision_by_gr):
 #
 #             # --- aggregated perceived responses ---
 #             if len(subset) > 0:
-#                 grouped = subset.groupby(["degree_perceived", "level_perceived"]).size().reset_index(name="count")
+#                 grouped = subset.groupby(["Perceived angle", "Perceived distance"]).size().reset_index(name="count")
 #
-#                 angles = grouped["degree_perceived"].apply(degree_to_angle)
-#                 radii = grouped["level_perceived"].apply(level_to_radius)
+#                 angles = grouped["Perceived angle"].apply(degree_to_angle)
+#                 radii = grouped["Perceived distance"].apply(level_to_radius)
 #
 #                 sizes = grouped["count"] * 18  # tweak if needed
 #
@@ -1310,7 +1329,7 @@ def final_coll_by_gr_p_val_df(final_collision_by_gr):
 #     plt.show()
 
 
-def plot_all_perceptions(subjects_data_trials, mod1='audio', mod2='haptic', mod3='visual'):
+def plot_all_perceptions(subjects_data_trials, mod1='auditory', mod2='haptic', mod3='visual'):
     modalities = [mod1, mod2, mod3]
 
     def degree_to_angle(d):
@@ -1330,13 +1349,13 @@ def plot_all_perceptions(subjects_data_trials, mod1='audio', mod2='haptic', mod3
         return l * 1.4
 
     palette = sns.color_palette('Set2')
-    color_map = {'audio': palette[0], 'haptic': palette[1], 'visual': palette[2]}
+    color_map = {'auditory': palette[0], 'haptic': palette[1], 'visual': palette[2]}
     base_scatter_size = 18
 
     all_subject_dfs = [df for df in subjects_data_trials.values() if df is not None and not df.empty]
     full_data = pd.concat(all_subject_dfs, ignore_index=True)
-    full_data = full_data[full_data["degree_perceived"] > 0]
-    max_count = full_data.groupby(["feedback_modality", "degree", "level", "degree_perceived", "level_perceived"]).size().max()
+    full_data = full_data[full_data["Angle perceived"] > 0]
+    max_count = full_data.groupby(["Modality", "Angle", "Distance", "Angle perceived", "Distance perceived"]).size().max()
     print(f"The maximum response count is: {max_count}")
 
 
@@ -1353,10 +1372,10 @@ def plot_all_perceptions(subjects_data_trials, mod1='audio', mod2='haptic', mod3
         for subject_name, df in subjects_data_trials.items():
             if df is None or df.empty:
                 continue
-            df_mod = df[df["feedback_modality"] == fbmod].copy()
+            df_mod = df[df["Modality"] == fbmod].copy()
             # remove misses and setup misses
-            df_mod = df_mod[df_mod["degree_perceived"] > 0]
-            cols = ["degree", "level", "degree_perceived", "level_perceived"]
+            df_mod = df_mod[df_mod["Angle perceived"] > 0]
+            cols = ["Angle", "Distance", "Angle perceived", "Distance perceived"]
             if not df_mod.empty:
                 all_data.append(df_mod[cols])
 
@@ -1370,7 +1389,7 @@ def plot_all_perceptions(subjects_data_trials, mod1='audio', mod2='haptic', mod3
                 row_idx = (m_idx * 3) + (l - 1)
                 col_idx = d - 1
                 ax = axes[row_idx, col_idx]
-                subset = data[(data["degree"] == d) & (data["level"] == l)]
+                subset = data[(data["Angle"] == d) & (data["Distance"] == l)]
                 R = level_to_radius(l)
 
                 # ------------------------------------------------------
@@ -1384,8 +1403,8 @@ def plot_all_perceptions(subjects_data_trials, mod1='audio', mod2='haptic', mod3
                 # ------------------------------------------------------
                 # True stimulus arrow
                 # ------------------------------------------------------
-                base_width = 0.20
-                base_head_width = 0.55
+                base_width = 0.25
+                base_head_width = 0.7
                 base_head_length = 0.55
                 ax.arrow(degree_to_angle(d),0, 0, R, width=base_width / R, head_width=base_head_width / R,
                     head_length=base_head_length, alpha=0.9, color='red', length_includes_head=True)
@@ -1394,9 +1413,9 @@ def plot_all_perceptions(subjects_data_trials, mod1='audio', mod2='haptic', mod3
                 # Perceived responses
                 # ------------------------------------------------------
                 if len(subset) > 0:
-                    grouped = (subset.groupby(["degree_perceived","level_perceived"]).size().reset_index(name="count"))
-                    angles = grouped["degree_perceived"].apply(degree_to_angle)
-                    radii = grouped["level_perceived"].apply(level_to_radius)
+                    grouped = (subset.groupby(["Angle perceived","Distance perceived"]).size().reset_index(name="count"))
+                    angles = grouped["Angle perceived"].apply(degree_to_angle)
+                    radii = grouped["Distance perceived"].apply(level_to_radius)
                     sizes = grouped["count"] * base_scatter_size
                     ax.scatter(angles, radii, s=sizes, alpha=0.6, color=mod_color, zorder=3, clip_on=False)
 
@@ -1404,16 +1423,17 @@ def plot_all_perceptions(subjects_data_trials, mod1='audio', mod2='haptic', mod3
                 ax.set_xticks([])
                 ax.set_yticks([])
                 ax.spines['polar'].set_visible(False)
+                ax.set_facecolor('none')
 
     # ------------------------------------------------------------------
     # Modality color legend
     # ------------------------------------------------------------------
     modality_handles = [
-        Line2D([0], [0], marker='o', color='w', markerfacecolor=color_map['audio'], markersize=40, label='Audio'),
+        Line2D([0], [0], marker='o', color='w', markerfacecolor=color_map['auditory'], markersize=40, label='Auditory'),
         Line2D([0], [0], marker='o', color='w', markerfacecolor=color_map['haptic'], markersize=40, label='Haptic'),
         Line2D([0], [0],marker='o',color='w',markerfacecolor=color_map['visual'],markersize=40,label='Visual')]
 
-    modality_legend = fig.legend(handles=modality_handles, loc='upper left', bbox_to_anchor=(0.0, 1.0),
+    modality_legend = fig.legend(handles=modality_handles, loc='upper left', bbox_to_anchor=(0.0, 0.99),
         ncol=3, prop={'family': 'Times New Roman', 'size': 40}, frameon=False, handletextpad=0.4,columnspacing=1.2)
     fig.add_artist(modality_legend)
 
@@ -1423,7 +1443,7 @@ def plot_all_perceptions(subjects_data_trials, mod1='audio', mod2='haptic', mod3
     legend_ax = fig.add_axes([0.60, 0.92, 0.38, 0.08])
     legend_ax.axis('off')
     my_font = {'family': 'Times New Roman', 'size': 40}
-    legend_ax.text(0.0, 0.6, 'Perception count:', ha='left', va='center',
+    legend_ax.text(0.4, 0.6, 'Scale:', ha='left', va='center',
                    fontdict=my_font, transform=legend_ax.transAxes)
     size_values = [10, 70, max_count]
     x_positions = [0.6, 0.75, 0.9]
@@ -1435,114 +1455,26 @@ def plot_all_perceptions(subjects_data_trials, mod1='audio', mod2='haptic', mod3
     # ------------------------------------------------------------------
     # Layout and save
     # ------------------------------------------------------------------
-    plt.tight_layout(rect=[0, 0, 1, 0.93])
-    plt.savefig('spatial_perception_results.pdf', format='pdf',bbox_inches='tight')
-    # plt.show()
+    plt.tight_layout(rect=[0, 0.01, 1, 0.93])
+    plt.savefig('spatial_perception_allmods.pdf', format='pdf')
+    plt.show()
 
 
 
 
 
-def compute_error_by_modality(subjects_data_trials):
-    all_results = []
 
-    # Iterate through the dictionary unpacking the subject name and their dataframe
-    for subject_name, df in subjects_data_trials.items():
-        if df is None or df.empty:
-            continue
-
-        df = df.copy()
-
-        # Remove invalid perceived values (0 = miss, -1 = setup miss)
-        df = df[(df['degree_perceived'] != 0) & (df['degree_perceived'] != -1)]
-
-        # If a dataframe becomes empty after filtering, skip it
-        if df.empty:
-            continue
-
-        # Degree error (circular: max distance on an 8-point circle is 4)
-        diff = np.abs(df['degree'] - df['degree_perceived'])
-        df['deg_error'] = np.minimum(diff, 8 - diff)
-
-        # Level error (linear)
-        df['lvl_error'] = np.abs(df['level'] - df['level_perceived'])
-
-        # Record the subject ID directly from the dictionary key
-        df['subject_id'] = subject_name
-
-        all_results.append(df[['subject_id', 'feedback_modality', 'deg_error', 'lvl_error']])
-
-    # Safety check if no valid data remains
-    if not all_results:
-        print("No valid error data found after filtering.")
-        return pd.DataFrame(), pd.DataFrame()
-
-    combined = pd.concat(all_results, ignore_index=True)
-
-    # =====================================================================
-    # --- A. PER-SUBJECT DISTRIBUTIONS ---
-    # =====================================================================
-
-    # Group by BOTH modality and subject_id
-    deg_counts_dist = (
-        combined.groupby(['feedback_modality', 'subject_id'])['deg_error']
-        .value_counts()
-        .unstack(fill_value=0)
-        .reindex(columns=range(5), fill_value=0)
-    )
-    deg_counts_dist.columns = [f"deg_err_{i}" for i in deg_counts_dist.columns]
-
-    lvl_counts_dist = (
-        combined.groupby(['feedback_modality', 'subject_id'])['lvl_error']
-        .value_counts()
-        .unstack(fill_value=0)
-        .reindex(columns=range(3), fill_value=0)
-    )
-    lvl_counts_dist.columns = [f"lvl_err_{i}" for i in lvl_counts_dist.columns]
-
-    # Combine into the distribution dataframe
-    subject_distributions = deg_counts_dist.join(lvl_counts_dist).reset_index()
-
-    # =====================================================================
-    # --- B. OVERALL AGGREGATE ---
-    # =====================================================================
-
-    # We can efficiently get the overall sums by grouping the subject distributions
-    overall_results = (
-        subject_distributions
-        .drop(columns=['subject_id'])
-        .groupby('feedback_modality')
-        .sum()
-        .reset_index()
-    )
-
-    # Weighted mean degree error
-    deg_cols = [f"deg_err_{i}" for i in range(5)]
-    deg_weights = np.array(range(5))
-
-    overall_results['weighted_mean_deg_err'] = ((overall_results[deg_cols].values @ deg_weights)
-                                                / overall_results[deg_cols].sum(axis=1))
-
-    # Weighted mean level error
-    lvl_cols = [f"lvl_err_{i}" for i in range(3)]
-    lvl_weights = np.array(range(3))
-
-    overall_results['weighted_mean_lvl_err'] = (
-                                                       overall_results[lvl_cols].values @ lvl_weights
-                                               ) / overall_results[lvl_cols].sum(axis=1)
-
-    return overall_results, subject_distributions
 
 
 def get_lvl_err_1_p_value(error_distribution):
-    # Extract audio and haptic data
-    audio = error_distribution[error_distribution['feedback_modality'] == 'audio'][['subject_id', 'lvl_err_1']]
-    haptic = error_distribution[error_distribution['feedback_modality'] == 'haptic'][['subject_id', 'lvl_err_1']]
+    # Extract auditory and haptic data
+    auditory = error_distribution[error_distribution['Modality'] == 'auditory'][['subject_id', 'lvl_err_1']]
+    haptic = error_distribution[error_distribution['Modality'] == 'haptic'][['subject_id', 'lvl_err_1']]
 
     # Merge on subject_id to ensure the pairs match up correctly
-    merged = pd.merge(audio, haptic, on='subject_id', suffixes=('_audio', '_haptic'))
+    merged = pd.merge(auditory, haptic, on='subject_id', suffixes=('_auditory', '_haptic'))
 
-    lvl_err_1_a_h = get_pairwise_p_value(merged['lvl_err_1_audio'], merged['lvl_err_1_haptic'])
+    lvl_err_1_a_h = get_pairwise_p_value(merged['lvl_err_1_auditory'], merged['lvl_err_1_haptic'])
 
     return lvl_err_1_a_h
 
@@ -1550,12 +1482,12 @@ def get_lvl_err_1_p_value(error_distribution):
 
 def evaluate_outliers_performance(outlier_names, subject_distributions):
     """
-    Compares the audio and haptic performance of specific outlier subjects
+    Compares the auditory and haptic performance of specific outlier subjects
     against the rest of the population.
     """
-    # 1. Filter for only audio and haptic modalities
+    # 1. Filter for only auditory and haptic modalities
     df_filtered = subject_distributions[
-        subject_distributions['feedback_modality'].isin(['audio', 'haptic'])
+        subject_distributions['Modality'].isin(['auditory', 'haptic'])
     ].copy()
 
     # 2. Assign subjects to either 'Outliers' or 'Population'
@@ -1567,7 +1499,7 @@ def evaluate_outliers_performance(outlier_names, subject_distributions):
 
     # 3. Aggregate the error counts for both groups
     # Drop subject_id so we just sum up the error counts per Group and Modality
-    group_sums = df_filtered.drop(columns=['subject_id']).groupby(['Group', 'feedback_modality']).sum().reset_index()
+    group_sums = df_filtered.drop(columns=['subject_id']).groupby(['Group', 'Modality']).sum().reset_index()
 
     # 4. Calculate weighted mean degree error
     deg_cols = [f"deg_err_{i}" for i in range(5)]
@@ -1592,28 +1524,28 @@ def evaluate_outliers_performance(outlier_names, subject_distributions):
         np.nan
     )
 
-    results = group_sums[['Group', 'feedback_modality', 'mean_deg_err', 'mean_lvl_err']]
+    results = group_sums[['Group', 'Modality', 'mean_deg_err', 'mean_lvl_err']]
 
     # 6. Print the Comparison
     print("=" * 60)
-    print(" OUTLIERS VS POPULATION PERFORMANCE (AUDIO & HAPTIC)")
+    print(" OUTLIERS VS POPULATION PERFORMANCE (auditory & HAPTIC)")
     print("=" * 60)
 
-    for mod in ['audio', 'haptic']:
+    for mod in ['auditory', 'haptic']:
         print(f"\n--- {mod.upper()} MODALITY ---")
 
         # Safely extract values
         try:
             outlier_deg = \
-            results[(results['Group'] == 'Outliers') & (results['feedback_modality'] == mod)]['mean_deg_err'].values[0]
+            results[(results['Group'] == 'Outliers') & (results['Modality'] == mod)]['mean_deg_err'].values[0]
             pop_deg = \
-            results[(results['Group'] == 'Population') & (results['feedback_modality'] == mod)]['mean_deg_err'].values[
+            results[(results['Group'] == 'Population') & (results['Modality'] == mod)]['mean_deg_err'].values[
                 0]
 
             outlier_lvl = \
-            results[(results['Group'] == 'Outliers') & (results['feedback_modality'] == mod)]['mean_lvl_err'].values[0]
+            results[(results['Group'] == 'Outliers') & (results['Modality'] == mod)]['mean_lvl_err'].values[0]
             pop_lvl = \
-            results[(results['Group'] == 'Population') & (results['feedback_modality'] == mod)]['mean_lvl_err'].values[
+            results[(results['Group'] == 'Population') & (results['Modality'] == mod)]['mean_lvl_err'].values[
                 0]
 
             # Print Degree Error Comparison
@@ -1650,7 +1582,7 @@ def plot_error_bars(results):
     # Melt the dataframe: converts it from wide format to long format
     # which Seaborn handles perfectly for grouped bar charts
     df_melted = results.melt(
-        id_vars=['feedback_modality'],
+        id_vars=['Modality'],
         value_vars=all_cols,
         var_name='error_type',
         value_name='count'
@@ -1664,7 +1596,7 @@ def plot_error_bars(results):
     df_melted['error_type'] = df_melted['error_type'].map(label_mapping)
 
     # Enforce consistent order across all your visualizations
-    modality_order = ['audio', 'haptic', 'visual']
+    modality_order = ['auditory', 'haptic', 'visual']
 
     # --- Plotting ---
     fig, ax = plt.subplots(figsize=(12, 6))
@@ -1674,7 +1606,7 @@ def plot_error_bars(results):
         data=df_melted,
         x='error_type',
         y='count',
-        hue='feedback_modality',
+        hue='Modality',
         hue_order=modality_order,
         palette="Set2",
         ax=ax,
@@ -1698,35 +1630,35 @@ def plot_error_bars(results):
 
 
 def amount_of_err_p_val_df(df):
-    v_deg_0 = df[df['feedback_modality'] == 'visual']['deg_err_0']
-    v_deg_1 = df[df['feedback_modality'] == 'visual']['deg_err_1']
-    v_deg_2 = df[df['feedback_modality'] == 'visual']['deg_err_2']
-    v_deg_3 = df[df['feedback_modality'] == 'visual']['deg_err_3']
-    v_deg_4 = df[df['feedback_modality'] == 'visual']['deg_err_4']
+    v_deg_0 = df[df['Modality'] == 'visual']['deg_err_0']
+    v_deg_1 = df[df['Modality'] == 'visual']['deg_err_1']
+    v_deg_2 = df[df['Modality'] == 'visual']['deg_err_2']
+    v_deg_3 = df[df['Modality'] == 'visual']['deg_err_3']
+    v_deg_4 = df[df['Modality'] == 'visual']['deg_err_4']
 
-    a_deg_0 = df[df['feedback_modality'] == 'audio']['deg_err_0']
-    a_deg_1 = df[df['feedback_modality'] == 'audio']['deg_err_1']
-    a_deg_2 = df[df['feedback_modality'] == 'audio']['deg_err_2']
-    a_deg_3 = df[df['feedback_modality'] == 'audio']['deg_err_3']
-    a_deg_4 = df[df['feedback_modality'] == 'audio']['deg_err_4']
+    a_deg_0 = df[df['Modality'] == 'auditory']['deg_err_0']
+    a_deg_1 = df[df['Modality'] == 'auditory']['deg_err_1']
+    a_deg_2 = df[df['Modality'] == 'auditory']['deg_err_2']
+    a_deg_3 = df[df['Modality'] == 'auditory']['deg_err_3']
+    a_deg_4 = df[df['Modality'] == 'auditory']['deg_err_4']
 
-    h_deg_0 = df[df['feedback_modality'] == 'haptic']['deg_err_0']
-    h_deg_1 = df[df['feedback_modality'] == 'haptic']['deg_err_1']
-    h_deg_2 = df[df['feedback_modality'] == 'haptic']['deg_err_2']
-    h_deg_3 = df[df['feedback_modality'] == 'haptic']['deg_err_3']
-    h_deg_4 = df[df['feedback_modality'] == 'haptic']['deg_err_4']
+    h_deg_0 = df[df['Modality'] == 'haptic']['deg_err_0']
+    h_deg_1 = df[df['Modality'] == 'haptic']['deg_err_1']
+    h_deg_2 = df[df['Modality'] == 'haptic']['deg_err_2']
+    h_deg_3 = df[df['Modality'] == 'haptic']['deg_err_3']
+    h_deg_4 = df[df['Modality'] == 'haptic']['deg_err_4']
 
-    v_lvl_0 = df[df['feedback_modality'] == 'visual']['lvl_err_0']
-    v_lvl_1 = df[df['feedback_modality'] == 'visual']['lvl_err_1']
-    v_lvl_2 = df[df['feedback_modality'] == 'visual']['lvl_err_2']
+    v_lvl_0 = df[df['Modality'] == 'visual']['lvl_err_0']
+    v_lvl_1 = df[df['Modality'] == 'visual']['lvl_err_1']
+    v_lvl_2 = df[df['Modality'] == 'visual']['lvl_err_2']
 
-    a_lvl_0 = df[df['feedback_modality'] == 'audio']['lvl_err_0']
-    a_lvl_1 = df[df['feedback_modality'] == 'audio']['lvl_err_1']
-    a_lvl_2 = df[df['feedback_modality'] == 'audio']['lvl_err_2']
+    a_lvl_0 = df[df['Modality'] == 'auditory']['lvl_err_0']
+    a_lvl_1 = df[df['Modality'] == 'auditory']['lvl_err_1']
+    a_lvl_2 = df[df['Modality'] == 'auditory']['lvl_err_2']
 
-    h_lvl_0 = df[df['feedback_modality'] == 'haptic']['lvl_err_0']
-    h_lvl_1 = df[df['feedback_modality'] == 'haptic']['lvl_err_1']
-    h_lvl_2 = df[df['feedback_modality'] == 'haptic']['lvl_err_2']
+    h_lvl_0 = df[df['Modality'] == 'haptic']['lvl_err_0']
+    h_lvl_1 = df[df['Modality'] == 'haptic']['lvl_err_1']
+    h_lvl_2 = df[df['Modality'] == 'haptic']['lvl_err_2']
 
     a_h_deg_1_p_val = get_pairwise_p_value(a_deg_1, h_deg_1)
     a_h_deg_2_p_val = get_pairwise_p_value(a_deg_2, h_deg_2)
@@ -1737,66 +1669,129 @@ def amount_of_err_p_val_df(df):
 
 
 def plot_error_boxplots(error_distribution):
-    # Safety check
+    """Plots the distribution of misses, angular errors, and radial distance errors."""
+
     if error_distribution is None or error_distribution.empty:
-        print("No error distribution data available to plot.")
         return
 
     sns.set_theme(style="whitegrid")
 
-    # --- Select columns (exclude *_0) ---
-    deg_cols = [col for col in error_distribution.columns if col.startswith('deg_err_') and col != 'deg_err_0']
-    lvl_cols = [col for col in error_distribution.columns if col.startswith('lvl_err_') and col != 'lvl_err_0']
-    all_cols = deg_cols + lvl_cols
+    # Isolate columns to plot (ignoring 0 errors since they represent perfect hits)
+    angle_cols = [col for col in error_distribution.columns if col.startswith('Angle_err_') and col != 'Angle_err_0']
+    dist_cols = [col for col in error_distribution.columns if col.startswith('Dist_err_') and col != 'Dist_err_0']
 
-    # --- Reshape data to "long" format for Seaborn ---
+    # Add Miss_count at the very beginning of the list
+    all_cols = ['Miss_count'] + angle_cols + dist_cols
+
     melted_df = error_distribution.melt(
-        id_vars=['subject_id', 'feedback_modality'],
+        id_vars=['Participant ID', 'Modality'],
         value_vars=all_cols,
         var_name='error_type',
         value_name='count'
     )
 
-    # Clean up the X-axis labels (e.g., 'deg_err_1' -> 'Degree Err 1')
+    # Map the backend column names to clean, readable labels for the X-axis
     label_mapping = {
-        col: col.replace('deg_err_', 'Degree Err ').replace('lvl_err_', 'Level Err ')
-        for col in all_cols
+        'Miss_count': 'Misses',
+        **{col: col.replace('Angle_err_', 'Angle error: ') for col in angle_cols},
+        **{col: col.replace('Dist_err_', 'Distance error: ') for col in dist_cols}
     }
     melted_df['error_type'] = melted_df['error_type'].map(label_mapping)
 
-    # Enforce consistent order across all your visualizations
-    modality_order = ['audio', 'haptic', 'visual']
+    # Standardize modality names for plotting
+    melted_df['Modality'] = melted_df['Modality'].str.lower()
 
-    # --- Create the plot ---
-    fig, ax = plt.subplots(figsize=(12, 6))
+    # Define the new modality order
+    modality_order = ['auditory', 'haptic', 'visual']
 
-    # Boxplot with enforced hue order
+    # Extract Set2 colors and map them to the desired order
+    set2_colors = sns.color_palette("Set2")
+    custom_palette = {
+        'auditory': set2_colors[0],
+        'haptic': set2_colors[1],
+        'visual': set2_colors[2]
+    }
+
+    fig, ax = plt.subplots(figsize=(14, 6))
+
     sns.boxplot(
         data=melted_df,
         x='error_type',
         y='count',
-        hue='feedback_modality',
+        hue='Modality',
         hue_order=modality_order,
-        palette="Set2",
+        palette=custom_palette,
         ax=ax
     )
 
-    ax.set_xlabel("Error Type and Magnitude")
-    ax.set_ylabel("Error Count (per subject)")
-    ax.set_title("Distribution of Errors by Modality Across Subjects", fontsize=14, pad=15)
+    ax.set_ylabel("Count (per subject)", fontweight='bold')
+    ax.set_xlabel("")
 
-    # Force the Y-axis to only show integer ticks
+    # Force Y-axis to show integer ticks only
     ax.yaxis.set_major_locator(mtick.MaxNLocator(integer=True))
 
-    # Rotate X-axis labels to prevent overlap
-    plt.xticks(rotation=45)
+    plt.xticks(rotation=45, ha='right')
 
-    # Move the legend outside the plot, so it doesn't overlap the boxes
-    ax.legend(title='Modality', bbox_to_anchor=(1.05, 1), loc='upper left')
+    ax.legend(title='Modality', bbox_to_anchor=(1.01, 1), loc='upper left')
+
+    # Add subtle vertical lines to separate Misses, Angular, and Distance categories visually
+    ax.axvline(0.5, color='gray', linestyle=':', alpha=0.7)
+    ax.axvline(4.5, color='gray', linestyle=':', alpha=0.7)
 
     plt.tight_layout()
     plt.show()
 
+
+def plot_error_boxplots(error_distribution, color_palette):
+    """Plots the distribution of angular and radial distance errors across feedback modalities."""
+
+    if error_distribution is None or error_distribution.empty:
+        return
+
+    sns.set_theme(style="whitegrid")
+
+    angle_cols = [col for col in error_distribution.columns if col.startswith('Angle_err_') and col != 'Angle_err_0']
+    dist_cols = [col for col in error_distribution.columns if col.startswith('Dist_err_') and col != 'Dist_err_0']
+    all_cols = angle_cols + dist_cols
+
+    melted_df = error_distribution.melt(
+        id_vars=['Participant ID', 'Modality'],
+        value_vars=all_cols,
+        var_name='error_type',
+        value_name='count'
+    )
+
+    label_mapping = {
+        col: col.replace('Angle_err_', 'Angle error: ').replace('Dist_err_', 'Distance error: ')
+        for col in all_cols
+    }
+    melted_df['error_type'] = melted_df['error_type'].map(label_mapping)
+
+    modality_order = ['visual', 'auditory', 'haptic']
+
+    fig, ax = plt.subplots(figsize=(12, 6))
+
+    sns.boxplot(
+        data=melted_df,
+        x='error_type',
+        y='count',
+        hue='Modality',
+        hue_order=modality_order,
+        palette=color_palette,
+        ax=ax
+    )
+
+    ax.set_ylabel("Error Count (per subject)")
+    # ax.set_title("Distribution of Errors by Modality Across Subjects", fontsize=14, pad=15)
+
+    ax.yaxis.set_major_locator(mtick.MaxNLocator(integer=True))
+
+    plt.xticks(rotation=45)
+
+    ax.legend(title='Modality', bbox_to_anchor=(1.05, 1), loc='upper left')
+
+    plt.tight_layout()
+    plt.show()
 
 def plot_weighted_error_means(error_results):
     # Safety check: Prevent crashing if data is missing
@@ -1808,7 +1803,7 @@ def plot_weighted_error_means(error_results):
 
     # --- Reshape data to "long" format ---
     melted_means = error_results.melt(
-        id_vars='feedback_modality',
+        id_vars='Modality',
         value_vars=['weighted_mean_deg_err', 'weighted_mean_lvl_err'],
         var_name='error_type',
         value_name='weighted_mean'
@@ -1821,7 +1816,7 @@ def plot_weighted_error_means(error_results):
     })
 
     # Enforce consistent order across all your visualizations
-    modality_order = ['audio', 'haptic', 'visual']
+    modality_order = ['auditory', 'haptic', 'visual']
 
     # --- Create the plot ---
     fig, ax = plt.subplots(figsize=(10, 6))
@@ -1829,7 +1824,7 @@ def plot_weighted_error_means(error_results):
     # Seaborn automatically groups the bars side-by-side using 'hue'
     sns.barplot(
         data=melted_means,
-        x='feedback_modality',
+        x='Modality',
         y='weighted_mean',
         hue='error_type',
         order=modality_order, # Locks the X-axis to your standard order
@@ -1864,20 +1859,20 @@ def plot_answer_duration(subjects_data_trials):
 
         # Capture the original row index as the trial number (1-based index)
         # If your data already has a specific 'trial' column, you can replace this line with df['trial']
-        df['trial_number'] = df.index + 1
+        df['Trial number'] = df.index + 1
 
         # Filter out missed/invalid trials where voice_start is 0
-        df = df[df['voice_start'] != 0]
+        df = df[df['Response start'] != 0]
 
         if df.empty:
             continue
 
         # Calculate the duration of the answer
-        df['answer_duration'] = df['voice_end'] - df['voice_start']
-        df['subject_id'] = subject_name
+        df['Answer duration'] = df['Response end'] - df['Response start']
+        df['Participant ID'] = subject_name
 
         # Keep the new trial_number column when appending
-        all_durations.append(df[['subject_id', 'trial_number', 'feedback_modality', 'answer_duration']])
+        all_durations.append(df[['Participant ID', 'Trial number', 'Modality', 'Answer duration']])
 
     # Safety check
     if not all_durations:
@@ -1890,29 +1885,29 @@ def plot_answer_duration(subjects_data_trials):
     # =========================================================
     # --- Print trials taking longer than 5 seconds ---
     # =========================================================
-    long_answers = combined_df[combined_df['answer_duration'] > 9]
+    long_answers = combined_df[combined_df['Answer duration'] > 9]
 
     if not long_answers.empty:
         print(f"\n--- Alert: Found {len(long_answers)} trial(s) exceeding 5 seconds ---")
         for _, row in long_answers.iterrows():
             # Added Trial Number to the print statement
             print(
-                f"Subject: {row['subject_id']:<12} | Trial: {row['trial_number']:<4} | Modality: {row['feedback_modality']:<8} | Duration: {row['answer_duration']:.2f}s")
+                f"Subject: {row['Participant ID']:<12} | Trial: {row['Trial number']:<4} | Modality: {row['Modality']:<8} | Duration: {row['Answer duration']:.2f}s")
         print("-" * 75 + "\n")
 
     # =========================================================
     # --- Plotting ---
     # =========================================================
     sns.set_theme(style="whitegrid")
-    modality_order = ['audio', 'haptic', 'visual']
+    modality_order = ['auditory', 'haptic', 'visual']
 
     fig, ax = plt.subplots(figsize=(5, 5))
 
     # Boxplot using Set2 palette
     sns.boxplot(
         data=combined_df,
-        x='feedback_modality',
-        y='answer_duration',
+        x='Modality',
+        y='Answer duration',
         order=modality_order,
         palette="Set2",
         ax=ax,
@@ -1928,8 +1923,104 @@ def plot_answer_duration(subjects_data_trials):
     plt.show()
 
 
+
+
+
+def plot_overall_timing_metrics(subjects_data_trials):
+    all_metrics = []
+
+    for subject_name, df in subjects_data_trials.items():
+        if df is None or df.empty:
+            continue
+
+        df = df.copy()
+        if subject_name == '10':
+            pass
+
+        # Filter out missed/invalid trials where Response start is 0
+        df = df[df['Response start'] != 0]
+
+
+        # Calculate the metrics
+        df['Answer duration'] = df['Response end'] - df['Response start']
+        df['Reaction time'] = df['Response start'] - df['Phase timestamp']
+        df['Participant ID'] = subject_name
+
+        # Keep only the necessary columns for combining
+        all_metrics.append(df[['Participant ID', 'Trial number', 'Answer duration', 'Reaction time']])
+
+
+    # Combine everything into a single DataFrame
+    combined_df = pd.concat(all_metrics, ignore_index=True)
+
+    # =========================================================
+    # --- Print Alerts for Long Times ---
+    # =========================================================
+    long_durations = combined_df[combined_df['Answer duration'] > 8]
+    if not long_durations.empty:
+        print(f"\n--- Alert: Found {len(long_durations)} trial(s) exceeding 9s Answer Duration ---")
+        for _, row in long_durations.iterrows():
+            print(
+                f"Subject: {row['Participant ID']:<12} | Trial: {row['Trial number']:<4} | Duration: {row['Answer duration']:.2f}s")
+
+    long_reactions = combined_df[combined_df['Reaction time'] > 7.8]
+    if not long_reactions.empty:
+        print(f"\n--- Alert: Found {len(long_reactions)} trial(s) exceeding 6s Reaction Time ---")
+        for _, row in long_reactions.iterrows():
+            print(
+                f"Subject: {row['Participant ID']:<12} | Trial: {row['Trial number']:<4} | Reaction Time: {row['Reaction time']:.2f}s")
+
+    print("-" * 75 + "\n")
+
+    # =========================================================
+    # --- Plotting ---
+    # =========================================================
+    # We melt the DataFrame so we can plot both metrics side-by-side easily
+    melted_df = combined_df.melt(
+        id_vars=['Participant ID', 'Trial number'],
+        value_vars=['Reaction time', 'Answer duration'],
+        var_name='Metric',
+        value_name='Time (Seconds)'
+    )
+
+    sns.set_theme(style="whitegrid")
+    fig, ax = plt.subplots(figsize=(8, 6))
+
+    # 1. Base Boxplot
+    sns.boxplot(
+        data=melted_df,
+        x='Metric',
+        y='Time (Seconds)',
+        palette="Set2",
+        ax=ax,
+        showfliers=False,  # Hide outliers in boxplot so they don't overlap with the scatter points
+        width=0.4
+    )
+
+    # 2. Scatter / Stripplot overlaid on top
+    sns.stripplot(
+        data=melted_df,
+        x='Metric',
+        y='Time (Seconds)',
+        color="black",
+        alpha=0.3,  # Transparency so overlapping points are visible
+        jitter=True,  # Spreads the dots horizontally so they don't form a single thick line
+        size=4,
+        ax=ax
+    )
+
+    # Labels and Formatting
+    ax.set_xlabel("Timing Metric", fontsize=12, labelpad=10)
+    ax.set_ylabel("Time (Seconds)", fontsize=12, labelpad=10)
+    ax.set_title("Overall Reaction Time vs. Answer Duration", fontsize=14, pad=15)
+
+    plt.tight_layout()
+    # plt.savefig('timing_metrics_combined.pdf', format='pdf', bbox_inches='tight')
+    plt.show()
+
+
 def get_duration_p_value(subjects_data_trials):
-    audio_durations = []
+    auditory_durations = []
     haptic_durations = []
 
     # Iterate through the dictionary to extract durations
@@ -1941,15 +2032,15 @@ def get_duration_p_value(subjects_data_trials):
 
         df['answer_duration'] = df['voice_end'] - df['voice_start']
 
-        audio_vals = df[df['feedback_modality'] == 'audio']['answer_duration'].tolist()
-        haptic_vals = df[df['feedback_modality'] == 'haptic']['answer_duration'].tolist()
+        auditory_vals = df[df['Modality'] == 'auditory']['answer_duration'].tolist()
+        haptic_vals = df[df['Modality'] == 'haptic']['answer_duration'].tolist()
 
-        audio_durations.extend(audio_vals)
+        auditory_durations.extend(auditory_vals)
         haptic_durations.extend(haptic_vals)
 
 
     # Calculate and return the p-value using your custom function
-    p_val = get_pairwise_p_value(audio_durations, haptic_durations)
+    p_val = get_pairwise_p_value(auditory_durations, haptic_durations)
 
     return p_val
 
@@ -1979,7 +2070,7 @@ def plot_reaction_time(subjects_data_trials):
         df['subject_id'] = subject_name
 
         # Keep the necessary columns
-        all_reaction_times.append(df[['subject_id', 'trial_number', 'feedback_modality', 'reaction_time']])
+        all_reaction_times.append(df[['subject_id', 'trial_number', 'Modality', 'reaction_time']])
 
     # Safety check
     if not all_reaction_times:
@@ -2000,13 +2091,13 @@ def plot_reaction_time(subjects_data_trials):
         print(f"\n--- Alert: Found {len(long_reactions)} trial(s) with reaction time > 5 seconds ---")
         for _, row in long_reactions.iterrows():
             print(
-                f"Subject: {row['subject_id']:<12} | Trial: {row['trial_number']:<4} | Modality: {row['feedback_modality']:<8} | Reaction Time: {row['reaction_time']:.2f}s")
+                f"Subject: {row['subject_id']:<12} | Trial: {row['trial_number']:<4} | Modality: {row['Modality']:<8} | Reaction Time: {row['reaction_time']:.2f}s")
         print("-" * 75 + "\n")
 
     early = combined_df[combined_df['reaction_time'] < 0]
 
     if not early.empty:
-        print(f"\n--- Alert: Found {len(early)} Audio trial(s) with reaction time < -2.3 seconds ---")
+        print(f"\n--- Alert: Found {len(early)} auditory trial(s) with reaction time < -2.3 seconds ---")
         for _, row in early.iterrows():
             print(
                 f"Subject: {row['subject_id']:<12} | Trial: {row['trial_number']:<4} | Reaction Time: {row['reaction_time']:.2f}s")
@@ -2015,14 +2106,14 @@ def plot_reaction_time(subjects_data_trials):
     # --- Plotting ---
     # =========================================================
     sns.set_theme(style="whitegrid")
-    modality_order = ['audio', 'haptic', 'visual']
+    modality_order = ['auditory', 'haptic', 'visual']
 
     fig, ax = plt.subplots(figsize=(5, 5))
 
     # Boxplot using Set2 palette (no scattered data points per your request)
     sns.boxplot(
         data=combined_df,
-        x='feedback_modality',
+        x='Modality',
         y='reaction_time',
         order=modality_order,
         palette="Set2",
@@ -2042,7 +2133,7 @@ def plot_reaction_time(subjects_data_trials):
 
 
 def get_reaction_time_p_value(subjects_data_trials):
-    audio_rts = []
+    auditory_rts = []
     haptic_rts = []
 
     # Iterate through the dictionary to extract reaction times
@@ -2061,25 +2152,25 @@ def get_reaction_time_p_value(subjects_data_trials):
         # Calculate Reaction Time: Voice Start minus Cue Presentation
         df['reaction_time'] = df['voice_start'] - df['relative_timestamp']
 
-        # Extract values for audio and haptic
-        audio_vals = df[df['feedback_modality'] == 'audio']['reaction_time'].tolist()
-        haptic_vals = df[df['feedback_modality'] == 'haptic']['reaction_time'].tolist()
+        # Extract values for auditory and haptic
+        auditory_vals = df[df['Modality'] == 'auditory']['reaction_time'].tolist()
+        haptic_vals = df[df['Modality'] == 'haptic']['reaction_time'].tolist()
 
-        audio_rts.extend(audio_vals)
+        auditory_rts.extend(auditory_vals)
         haptic_rts.extend(haptic_vals)
 
     # Safety check to ensure we have data for both modalities
-    if not audio_rts or not haptic_rts:
-        print("Not enough valid reaction time data to compare audio and haptic.")
+    if not auditory_rts or not haptic_rts:
+        print("Not enough valid reaction time data to compare auditory and haptic.")
         return None
 
     # Calculate and return the p-value using your custom function
-    p_val = get_pairwise_p_value(audio_rts, haptic_rts)
+    p_val = get_pairwise_p_value(auditory_rts, haptic_rts)
 
     return p_val
 
 
-def apply_audio_delays(subjects_data_trials, delays_df):
+def apply_auditory_delays(subjects_data_trials, delays_df):
     shifted_data = {}
 
     # Clean whitespace from subject names to ensure perfect matching
@@ -2136,12 +2227,12 @@ def plot_error_collision_tradeoff(subjects_data_trials, subjects_data_full):
             continue
 
         # 1. Filter out trials where perceived values are -1 (should not be counted)
-        df_filtered = df[(df['degree_perceived'] != -1) & (df['level_perceived'] != -1)]
+        df_filtered = df[(df['Perceived angle'] != -1) & (df['Perceived distance'] != -1)]
 
         # 2. Count errors (where actual degree/level does not match perceived degree/level)
         # Note: perceived values of 0 (missed) naturally count as errors here
-        errors = ((df_filtered['degree'] != df_filtered['degree_perceived']) |
-                  (df_filtered['level'] != df_filtered['level_perceived'])).sum()
+        errors = ((df_filtered['degree'] != df_filtered['Perceived angle']) |
+                  (df_filtered['level'] != df_filtered['Perceived distance'])).sum()
 
         # 3. Get the last recorded number of collisions for the subject
         last_collisions = df['number_of_collision'].iloc[-1]
@@ -2212,11 +2303,11 @@ def plot_difficulty_error_collision_tradeoff(subjects_data_trials, difficulty):
             continue
 
         # 2. Filter out trials where perceived values are -1
-        df_hard_filtered = df_hard[(df_hard['degree_perceived'] != -1) | (df_hard['degree_perceived'] != 0)]
+        df_hard_filtered = df_hard[(df_hard['Perceived angle'] != -1) | (df_hard['Perceived angle'] != 0)]
 
         # 3. Count errors specifically in the hard phase
-        hard_errors = ((df_hard_filtered['degree'] != df_hard_filtered['degree_perceived']) |
-                       (df_hard_filtered['level'] != df_hard_filtered['level_perceived'])).sum()
+        hard_errors = ((df_hard_filtered['degree'] != df_hard_filtered['Perceived angle']) |
+                       (df_hard_filtered['level'] != df_hard_filtered['Perceived distance'])).sum()
 
         # 4. Get collisions specifically in the hard phase
         # Assuming 'number_of_collision' is cumulative, we subtract the starting count from the ending count
@@ -2269,7 +2360,7 @@ def plot_difficulty_error_collision_tradeoff(subjects_data_trials, difficulty):
 
 
 
-def plot_misses_collision_tradeoff(subjects_data_trials):
+def plot_misses_collision_tradeoff(subjects_data_trials, experiment_logs_all):
     stats_list = []
 
     for subject_name, df in subjects_data_trials.items():
@@ -2278,14 +2369,16 @@ def plot_misses_collision_tradeoff(subjects_data_trials):
             continue
 
         # 1. Filter out trials where perceived values are -1 (invalid/should not be counted)
-        df_filtered = df[(df['degree_perceived'] != -1) & (df['level_perceived'] != -1)]
+        df_filtered = df[(df['Perceived angle'] != -1) & (df['Perceived distance'] != -1)]
 
         # 2. Count ONLY the "misses" (where perceived value is exactly 0)
-        misses = ((df_filtered['degree_perceived'] == 0) |
-                  (df_filtered['level_perceived'] == 0)).sum()
+        misses = ((df_filtered['Perceived angle'] == 0) |
+                  (df_filtered['Perceived distance'] == 0)).sum()
 
         # 3. Get the last recorded number of collisions for the subject
-        last_collisions = df['number_of_collision'].iloc[-1]
+        if subject_name in experiment_logs_all and not experiment_logs_all[subject_name].empty:
+            log_df = experiment_logs_all[subject_name]
+            last_collisions = log_df['Number of collision'].iloc[-1]
 
         # Append the metrics for this subject
         stats_list.append({
@@ -2332,7 +2425,7 @@ def plot_misses_collision_tradeoff(subjects_data_trials):
     plt.show()
 
 
-def plot_tradeoff_groups_error(subjects_data_trials):
+def plot_tradeoff_groups_error(subjects_data_trials, experiment_logs_all):
     stats_list = []
 
     # 1. Process each subject
@@ -2341,14 +2434,16 @@ def plot_tradeoff_groups_error(subjects_data_trials):
             continue
 
         # Filter valid trials
-        df_filtered = df[(df['degree_perceived'] != -1) & (df['level_perceived'] != -1)]
+        df_filtered = df[(df['Perceived angle'] != -1) & (df['Perceived distance'] != -1)]
 
         # Calculate errors
-        errors = ((df_filtered['degree'] != df_filtered['degree_perceived']) |
-                  (df_filtered['level'] != df_filtered['level_perceived'])).sum()
+        errors = ((df_filtered['Angle'] != df_filtered['Perceived distance']) |
+                  (df_filtered['Distance'] != df_filtered['Perceived distance'])).sum()
 
         # Calculate final collisions
-        last_collisions = df['number_of_collision'].iloc[-1]
+        if subject_name in experiment_logs_all and not experiment_logs_all[subject_name].empty:
+            log_df = experiment_logs_all[subject_name]
+            last_collisions = log_df['Number of collision'].iloc[-1]
 
         stats_list.append({
             'Subject': subject_name,
@@ -2410,7 +2505,7 @@ def plot_tradeoff_groups_error(subjects_data_trials):
     plt.show()
 
 
-def plot_tradeoff_groups_misses(subjects_data_trials):
+def plot_tradeoff_groups_misses(subjects_data_trials, experiment_logs_all):
     stats_list = []
 
     # 1. Process each subject
@@ -2419,14 +2514,15 @@ def plot_tradeoff_groups_misses(subjects_data_trials):
             continue
 
         # Filter valid trials (ignore -1)
-        df_filtered = df[(df['degree_perceived'] != -1) & (df['level_perceived'] != -1)]
+        df_filtered = df[(df['Perceived angle'] != -1) & (df['Perceived distance'] != -1)]
 
         # Calculate Misses (where degree or level is exactly 0)
-        misses = ((df_filtered['degree_perceived'] == 0) |
-                  (df_filtered['level_perceived'] == 0)).sum()
+        misses = ((df_filtered['Perceived angle'] == 0) |
+                  (df_filtered['Perceived distance'] == 0)).sum()
 
-        # Calculate final collisions
-        last_collisions = df['number_of_collision'].iloc[-1]
+        if subject_name in experiment_logs_all and not experiment_logs_all[subject_name].empty:
+            log_df = experiment_logs_all[subject_name]
+            last_collisions = log_df['Number of collision'].iloc[-1]
 
         stats_list.append({
             'Subject': subject_name,
@@ -2495,12 +2591,12 @@ def plot_deg_lvl_position_misses_boxplot(subjects_data_trials, fb_mod):
             continue
 
         # 2. Filter for purely visual feedback and exclude invalid (-1) responses
-        df_vis = df[(df['feedback_modality'] == fb_mod) &
-                    (df['degree_perceived'] != -1) &
-                    (df['level_perceived'] != -1)].copy()
+        df_vis = df[(df['Modality'] == fb_mod) &
+                    (df['Perceived angle'] != -1) &
+                    (df['Perceived distance'] != -1)].copy()
 
         # 3. Create a boolean mask for misses (0 in degree or level)
-        df_vis['is_miss'] = (df_vis['degree_perceived'] == 0) | (df_vis['level_perceived'] == 0)
+        df_vis['is_miss'] = (df_vis['Perceived angle'] == 0) | (df_vis['Perceived distance'] == 0)
         t = df_vis['is_miss'].sum()
         # 4. Group and sum the misses by degree and level for this specific subject
         deg_misses = df_vis.groupby('degree')['is_miss'].sum().to_dict()
@@ -2560,14 +2656,14 @@ def print_subjects_with_high_specific_mod_misses(subjects_data_trials, fb_mod):
 
     for subject_name, df in subjects_data_trials.items():
 
-        df_filtered = df[(df['feedback_modality'] == {fb_mod}) &
+        df_filtered = df[(df['Modality'] == {fb_mod}) &
                          (df['degree'] == 3) &
-                         (df['degree_perceived'] != -1) &
-                         (df['level_perceived'] != -1)]
+                         (df['Perceived angle'] != -1) &
+                         (df['Perceived distance'] != -1)]
 
         # 2. Count the misses (where perceived degree or level is 0)
-        miss_count = ((df_filtered['degree_perceived'] == 0) |
-                      (df_filtered['level_perceived'] == 0)).sum()
+        miss_count = ((df_filtered['Perceived angle'] == 0) |
+                      (df_filtered['Perceived distance'] == 0)).sum()
 
         if miss_count > 3:
             print(f"• {subject_name} (Total misses: {miss_count})")
@@ -2587,15 +2683,15 @@ def plot_misses_vs_errors(subjects_data_trials):
             continue
 
         # Filter out invalid trials (-1)
-        df_filtered = df[(df['degree_perceived'] != -1) & (df['level_perceived'] != -1)]
+        df_filtered = df[(df['Perceived angle'] != -1) & (df['Perceived distance'] != -1)]
 
         # Count Misses (where perceived is strictly 0)
-        misses = ((df_filtered['degree_perceived'] == 0) |
-                  (df_filtered['level_perceived'] == 0)).sum()
+        misses = ((df_filtered['Perceived angle'] == 0) |
+                  (df_filtered['Perceived distance'] == 0)).sum()
 
         # Count Errors (where perceived does not match the actual stimuli)
-        errors = ((df_filtered['degree'] != df_filtered['degree_perceived']) |
-                  (df_filtered['level'] != df_filtered['level_perceived'])).sum()
+        errors = ((df_filtered['Angle'] != df_filtered['Perceived angle']) |
+                  (df_filtered['Distance'] != df_filtered['Perceived distance'])).sum()
 
         stats_list.append({
             'Subject': subject_name,
@@ -2641,4 +2737,68 @@ def plot_misses_vs_errors(subjects_data_trials):
 
     plt.tight_layout()
     plt.show()
+
+
+def get_missed_invalidated_trials_percentage(subjects_data_trials):
+    """Calculates global and modality-specific percentages for missed and invalidated trials."""
+
+    valid_dfs = [df for df in subjects_data_trials.values() if df is not None and not df.empty]
+
+    if not valid_dfs:
+        print("No valid data found in the provided dictionary.")
+        return
+
+    full_data = pd.concat(valid_dfs, ignore_index=True)
+
+    col_name = 'Distance perceived'
+    if col_name not in full_data.columns:
+        if 'Perceived distance' in full_data.columns:
+            col_name = 'Perceived distance'
+        else:
+            print("❌ Error: Could not find a 'Distance perceived' column in the dataset.")
+            return
+
+    total_trials = len(full_data)
+
+    invalidated_count = (full_data[col_name] == -1).sum()
+    missed_count = (full_data[col_name] == 0).sum()
+
+    invalidated_pct = (invalidated_count / total_trials) * 100
+    missed_pct = (missed_count / total_trials) * 100
+
+    print("=========================================")
+    print("📊 Trial Status Summary")
+    print("=========================================")
+    print(f"Total Trials Analyzed: {total_trials:,}")
+    print(f"Invalidated Trials (-1): {invalidated_count:,} ({invalidated_pct:.2f}%)")
+    print(f"Missed Trials (0):       {missed_count:,} ({missed_pct:.2f}%)")
+
+    if 'Modality' in full_data.columns:
+        print("=========================================")
+        print("📊 Missed Trials by Modality")
+        print("=========================================")
+
+        modalities = ['visual', 'auditory', 'haptic']
+        existing_mods = full_data['Modality'].unique()
+
+        for mod in [m for m in modalities if m in existing_mods]:
+            mod_data = full_data[full_data['Modality'] == mod]
+            total_mod_trials = len(mod_data)
+
+            if total_mod_trials == 0:
+                continue
+
+            mod_misses = (mod_data[col_name] == 0).sum()
+
+            pct_within_modality = (mod_misses / total_mod_trials) * 100
+            pct_overall = (mod_misses / total_trials) * 100
+
+            print(f"--- {mod.capitalize()} ---")
+            print(f"Misses: {mod_misses:,} (out of {total_mod_trials:,} {mod} cues)")
+            print(f"% within {mod} cues: {pct_within_modality:.2f}%")
+            print(f"% of all trials overall:  {pct_overall:.2f}%")
+            print("")
+
+    print("=========================================")
+
 
