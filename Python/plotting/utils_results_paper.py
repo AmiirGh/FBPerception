@@ -1,52 +1,193 @@
 from utils import *
 
 
-def plot_timing_metrics(subjects_data_trials, modality_colors):
+def plot_timing_metrics_unpaired(perception_results_all, color_palette, axes=None):
     """
-    Generates side-by-side box plots for response and reaction times across visual, auditory, and haptic modalities.
+    Plots response and reaction times.
+    Also prints the top 5 highest reaction and response times across all modalities.
     """
-    # Combine dictionary of DataFrames into one
-    df_all = pd.concat(subjects_data_trials.values(), ignore_index=True)
+    # 1. Safely combine data
+    df_list = []
+    for pid, df in perception_results_all.items():
+        if df is not None and not df.empty:
+            df_copy = df.copy()
+            df_copy['Participant ID'] = pid
+            df_list.append(df_copy)
+
+    df_all = pd.concat(df_list, ignore_index=True)
 
     valid_df = df_all[~df_all['Perceived angle'].isin([0, -1])].copy()
+    valid_df['Modality'] = valid_df['Modality'].str.lower()
 
     valid_df['Response time'] = valid_df['Response end'] - valid_df['Response start']
     valid_df['Reaction time'] = valid_df['Response start'] - valid_df['Phase timestamp']
 
     modality_order = ['visual', 'auditory', 'haptic']
 
-    fig, axes = plt.subplots(1, 2, figsize=(12, 6))
+    # Extract only the exact modality colors from the broader palette
+    mod_palette = {mod: color_palette[mod] for mod in modality_order}
 
-    sns.boxplot(
-        data=valid_df,
-        x='Modality',
-        y='Response time',
-        order=modality_order,
-        palette=modality_colors,
-        ax=axes[0],
-        showfliers=False
-    )
-    axes[0].set_title('Response Time by Modality')
+    standalone = axes is None
+    if standalone:
+        fig, axes = plt.subplots(1, 2, figsize=(12, 6))
+
+    # --- Plot 1: Response Time ---
+    sns.boxplot(data=valid_df, x='Modality', y='Response time', order=modality_order,
+                palette=mod_palette, ax=axes[0], showfliers=False)
+
+    axes[0].set_title('Response Time by Modality', fontweight='bold')
     axes[0].set_ylabel('Response Time (s)')
-    axes[0].set_ylim([0, 1.5])
 
-    sns.boxplot(
-        data=valid_df,
-        x='Modality',
-        y='Reaction time',
-        order=modality_order,
-        palette=modality_colors,
-        ax=axes[1],
-        showfliers=False
-    )
-    axes[1].set_title('Reaction Time by Modality')
+    # --- Plot 2: Reaction Time ---
+    sns.boxplot(data=valid_df, x='Modality', y='Reaction time', order=modality_order,
+                palette=mod_palette, ax=axes[1], showfliers=False)
+
+    axes[1].set_title('Reaction Time by Modality', fontweight='bold')
     axes[1].set_ylabel('Reaction Time (s)')
-    axes[1].set_ylim([0, 6])
-    plt.tight_layout()
-    plt.show()
+
+    # --- Print Top 5 Longest Times ---
+    print("\n" + "=" * 60)
+    print("TOP 5 LONGEST REACTION TIMES ACROSS ALL MODALITIES")
+    print("=" * 60)
+    top_reaction = valid_df.nlargest(5, 'Reaction time')[
+        ['Participant ID', 'Modality', 'Difficulty level', 'Reaction time']]
+    print(top_reaction.to_string(index=False))
+
+    print("\n" + "=" * 60)
+    print("TOP 5 LONGEST RESPONSE TIMES ACROSS ALL MODALITIES")
+    print("=" * 60)
+    top_response = valid_df.nlargest(5, 'Response time')[
+        ['Participant ID', 'Modality', 'Difficulty level', 'Response time']]
+    print(top_response.to_string(index=False))
+    print("=" * 60 + "\n")
+
+    if standalone:
+        plt.tight_layout()
+        plt.show()
 
 
-def plot_misses_grouped_box(subjects_data_trials, modality_colors):
+def plot_timing_metrics_unpaired(perception_results_all, color_palette, axes=None):
+    """
+    Plots response and reaction times.
+    Calculates and shows Mann-Whitney U p-values for Reaction Time ONLY,
+    comparing Visual vs Auditory and Visual vs Haptic.
+    Also prints the top 5 highest reaction and response times across all modalities.
+    """
+    # 1. Safely combine data
+    df_list = []
+    for pid, df in perception_results_all.items():
+        if df is not None and not df.empty:
+            df_copy = df.copy()
+            df_copy['Participant ID'] = pid
+            df_list.append(df_copy)
+
+    df_all = pd.concat(df_list, ignore_index=True)
+
+    valid_df = df_all[~df_all['Perceived angle'].isin([0, -1])].copy()
+    valid_df['Modality'] = valid_df['Modality'].str.lower()
+
+    valid_df['Response time'] = valid_df['Response end'] - valid_df['Response start']
+    valid_df['Reaction time'] = valid_df['Response start'] - valid_df['Phase timestamp']
+
+    # Aggregate to subject-level means for the statistical test
+    subject_means = valid_df.groupby(['Participant ID', 'Modality'])['Reaction time'].mean().reset_index()
+
+    modality_order = ['visual', 'auditory', 'haptic']
+
+    # Extract only the exact modality colors from the broader palette
+    mod_palette = {mod: color_palette[mod] for mod in modality_order}
+
+    standalone = axes is None
+    if standalone:
+        fig, axes = plt.subplots(1, 2, figsize=(12, 6))
+
+    # --- Plot 1: Response Time (No Stats) ---
+    sns.boxplot(data=valid_df, x='Modality', y='Response time', order=modality_order,
+                palette=mod_palette, ax=axes[0], showfliers=False)
+
+    axes[0].set_title('Response Time by Modality', fontweight='bold')
+    axes[0].set_ylabel('Response Time (s)')
+
+    # --- Plot 2: Reaction Time (With Stats) ---
+    sns.boxplot(data=valid_df, x='Modality', y='Reaction time', order=modality_order,
+                palette=mod_palette, ax=axes[1], showfliers=False)
+
+    axes[1].set_title('Reaction Time by Modality (with p-values)', fontweight='bold')
+    axes[1].set_ylabel('Reaction Time (s)')
+
+    # --- Add Specific Annotations for Reaction Time ---
+    pairs_to_test = [('visual', 'auditory'), ('visual', 'haptic')]
+    num_comparisons = len(pairs_to_test)
+
+    print(f"\n--- Calculating Unpaired P-Values for Reaction time ---")
+
+    # Determine base height using the actual data being plotted (ignoring outliers)
+    max_val = valid_df['Reaction time'].quantile(0.95)
+    y_base = max_val * 1.1
+    y_step = max_val * 0.15
+
+    for i, (mod1, mod2) in enumerate(pairs_to_test):
+        group1 = subject_means[subject_means['Modality'] == mod1]['Reaction time'].dropna()
+        group2 = subject_means[subject_means['Modality'] == mod2]['Reaction time'].dropna()
+
+        if group1.empty or group2.empty:
+            print(f"Skipping {mod1} vs {mod2} (Empty group detected)")
+            continue
+
+        # Mann-Whitney U test
+        stat, raw_p = mannwhitneyu(group1, group2, alternative='two-sided')
+        bonferroni_p = min(raw_p * num_comparisons, 1.0)
+
+        print(f"{mod1.capitalize()} vs {mod2.capitalize()}: Raw p={raw_p:.5f}, Bonferroni p={bonferroni_p:.5f}")
+
+        if bonferroni_p < 0.001:
+            p_text = "p < 0.001"
+        elif bonferroni_p < 0.05:
+            p_text = f"p = {bonferroni_p:.3f}"
+        else:
+            p_text = f"p = {bonferroni_p:.2f}"
+
+        x1 = modality_order.index(mod1)
+        x2 = modality_order.index(mod2)
+
+        y = y_base + (i * y_step)
+        h = max_val * 0.03
+
+        # Draw brackets with high zorder to prevent being hidden by grid/boxplots
+        axes[1].plot([x1, x1, x2, x2], [y, y + h, y + h, y], lw=1.5, color='black', zorder=10)
+
+        weight = 'bold' if bonferroni_p < 0.05 else 'normal'
+        axes[1].text((x1 + x2) * 0.5, y + h + (max_val * 0.02), p_text,
+                     ha='center', va='bottom', color='black', fontsize=10, fontweight=weight, zorder=10)
+
+    # Set limits dynamically so the brackets are never cut off (minimum y-limit of 6.0)
+    highest_bracket = y_base + (len(pairs_to_test) * y_step)
+    axes[1].set_ylim([0, max(6.0, highest_bracket * 1.15)])
+
+    # --- Print Top 5 Longest Times ---
+    print("\n" + "=" * 60)
+    print("TOP 5 LONGEST REACTION TIMES ACROSS ALL MODALITIES")
+    print("=" * 60)
+    top_reaction = valid_df.nlargest(5, 'Reaction time')[
+        ['Participant ID', 'Modality', 'Difficulty level', 'Reaction time']]
+    print(top_reaction.to_string(index=False))
+
+    print("\n" + "=" * 60)
+    print("TOP 5 LONGEST RESPONSE TIMES ACROSS ALL MODALITIES")
+    print("=" * 60)
+    top_response = valid_df.nlargest(5, 'Response time')[
+        ['Participant ID', 'Modality', 'Difficulty level', 'Response time']]
+    print(top_response.to_string(index=False))
+    print("=" * 60 + "\n")
+
+    if standalone:
+        plt.tight_layout()
+        plt.show()
+
+
+
+
+def plot_misses_grouped_box(subjects_data_trials, color_palette):
     """
     Calculates the total missed trials per subject and plots them grouped by difficulty, separated by modality.
     """
@@ -70,16 +211,8 @@ def plot_misses_grouped_box(subjects_data_trials, modality_colors):
 
     plt.figure(figsize=(10, 6))
 
-    sns.boxplot(
-        data=misses_df,
-        x='Difficulty level',
-        y='is_miss',
-        hue='Modality',
-        order=difficulty_order,
-        hue_order=modality_order,
-        palette=modality_colors,
-        showfliers=False
-    )
+    sns.boxplot(data=misses_df, x='Difficulty level', y='is_miss', hue='Modality', order=difficulty_order,
+                hue_order=modality_order, palette=color_palette, showfliers=False)
 
     plt.title('Missed Trials Distribution by Difficulty and Modality')
     plt.ylabel('Number of Misses (per subject)')
@@ -204,7 +337,7 @@ def compute_error_by_modality_temp(subjects_data_trials):
     return overall_results, subject_distributions
 
 
-def plot_error_boxplots_temp(error_distribution, ax=None):
+def plot_error_boxplots_temp(error_distribution, color_palette, ax=None):
     """Plots the distribution of misses, angular errors, and radial distance errors.
 
     If `ax` is provided, the plot is drawn onto that Axes instead of creating
@@ -246,14 +379,6 @@ def plot_error_boxplots_temp(error_distribution, ax=None):
     # Define the new modality order
     modality_order = ['auditory', 'haptic', 'visual']
 
-    # Extract Set2 colors and map them to the desired order
-    set2_colors = sns.color_palette("Set2")
-    custom_palette = {
-        'auditory': set2_colors[0],
-        'haptic': set2_colors[1],
-        'visual': set2_colors[2]
-    }
-
     if standalone:
         fig, ax = plt.subplots(figsize=(14, 6))
 
@@ -263,7 +388,7 @@ def plot_error_boxplots_temp(error_distribution, ax=None):
         y='count',
         hue='Modality',
         hue_order=modality_order,
-        palette=custom_palette,
+        palette=color_palette,
         ax=ax
     )
 
@@ -502,7 +627,7 @@ def test_cross_modal_mapping_cost(perception_results_all):
 
 
 
-def test_perceptual_tunneling(perception_results_all):
+def test_perceptual_tunneling(perception_results_all, color_palette):
     """
     Evaluates non-uniform perceptual tunneling by tracking Miss Rates
     and Angular Accuracy across changing difficulty levels.
@@ -573,8 +698,8 @@ def test_perceptual_tunneling(perception_results_all):
     sns.set_theme(style="whitegrid", context="paper", font_scale=1.2)
     plt.figure(figsize=(8, 6))
 
-    # Define distinct colors and markers
-    palette = {'Visual': '#4C72B0', 'Auditory': '#55A868', 'Haptic': '#C44E52'}
+    # Define distinct colors and markers, using the shared modality palette
+    palette = {mod.capitalize(): color for mod, color in color_palette.items()}
     markers = {'Visual': 'o', 'Auditory': 's', 'Haptic': '^'}
 
     # Create the interaction plot
@@ -700,7 +825,7 @@ def test_speed_accuracy_tradeoffs(perception_results_all):
     return df_combined
 
 
-def plot_speed_accuracy_density(df):
+def plot_speed_accuracy_density(df, color_palette):
     """
     Generates a faceted 2D KDE contour plot to visualize the density
     of speed (Reaction Delay) vs. accuracy (Angular Error) for each modality.
@@ -712,8 +837,8 @@ def plot_speed_accuracy_density(df):
     # Set publication-ready theme
     sns.set_theme(style="whitegrid", context="paper", font_scale=1.2)
 
-    # Define a distinct color palette for the modalities
-    palette = {'Visual': '#4C72B0', 'Auditory': '#55A868', 'Haptic': '#C44E52'}
+    # Define a distinct color palette for the modalities, using the shared palette
+    palette = {mod.capitalize(): color for mod, color in color_palette.items()}
 
     # Create a FacetGrid for side-by-side subplots
     g = sns.FacetGrid(plot_df, col="Modality", hue="Modality", palette=palette, height=5, aspect=1)
@@ -922,99 +1047,323 @@ def analyze_motor_cognitive_interference(perception_results_all, experiment_logs
     return df
 
 
-def analyze_attention_redistribution(subjects_data_trials, experiment_logs_all, ax=None):
-    """Calculates perception and motor metrics across difficulty levels to evaluate dual-task cognitive resource allocation.
+def analyze_attention_redistribution(perception_results_all, experiment_logs_all, demographics, ax=None):
+    """
+    Calculates perception and motor metrics across difficulty levels.
 
-    If `ax` is provided, the plot is drawn onto that Axes instead of creating
-    a new figure, allowing this function to be embedded in a larger dashboard.
+    Invalidated trial:
+        Either perceived value is -1.
+
+    Missed trial:
+        The trial is not invalidated and either perceived value is 0.
+
+    Miss rate:
+        Missed trials divided by missed plus valid-response trials.
     """
 
-    metrics_list = []
+    required_demographics_columns = {"Participant ID", "Gender"}
+    missing_demographics_columns = required_demographics_columns - set(demographics.columns)
 
-    for subject_id in subjects_data_trials.keys():
-        trials_df = subjects_data_trials.get(subject_id)
+    if missing_demographics_columns:
+        raise ValueError(f"Missing demographics columns: {sorted(missing_demographics_columns)}")
+
+    participant_names = list(perception_results_all.keys())
+    demographics = demographics.reset_index(drop=True).copy()
+
+    if len(participant_names) != len(demographics):
+        raise ValueError(
+            f"The number of participant folders ({len(participant_names)}) does not match "
+            f"the number of demographics rows ({len(demographics)})."
+        )
+
+    demographics["Gender"] = demographics["Gender"].astype(str).str.strip().str.lower()
+    participant_gender_map = {
+        participant_name: demographics.loc[index, "Gender"]
+        for index, participant_name in enumerate(participant_names)
+    }
+
+    metrics_list = []
+    difficulty_order = ["easy", "medium", "hard"]
+
+    for subject_id in participant_names:
+        trials_df = perception_results_all.get(subject_id)
         logs_df = experiment_logs_all.get(subject_id)
 
         if trials_df is None or trials_df.empty or logs_df is None or logs_df.empty:
             continue
 
-        # Account for potential column name variations
-        perc_angle_col = 'Angle perceived' if 'Angle perceived' in trials_df.columns else 'Perceived angle'
-        perc_dist_col = 'Distance perceived' if 'Distance perceived' in trials_df.columns else 'Perceived distance'
+        participant_gender = participant_gender_map.get(subject_id, np.nan)
 
-        for difficulty in ['easy', 'medium', 'hard']:
-            phase_trials = trials_df[trials_df['Difficulty level'] == difficulty].copy()
-            phase_logs = logs_df[logs_df['Difficulty level'] == difficulty].copy()
+        if "Angle perceived" in trials_df.columns:
+            perc_angle_col = "Angle perceived"
+        elif "Perceived angle" in trials_df.columns:
+            perc_angle_col = "Perceived angle"
+        else:
+            raise ValueError(f"No perceived-angle column was found for participant {subject_id}.")
 
-            if phase_trials.empty or phase_logs.empty:
-                continue
+        if "Distance perceived" in trials_df.columns:
+            perc_dist_col = "Distance perceived"
+        elif "Perceived distance" in trials_df.columns:
+            perc_dist_col = "Perceived distance"
+        else:
+            raise ValueError(f"No perceived-distance column was found for participant {subject_id}.")
 
-            # 1. Perception: Localization Accuracy
-            valid_trials = phase_trials[(phase_trials[perc_angle_col] > 0) & (phase_trials[perc_dist_col] > 0)]
+        for difficulty in difficulty_order:
+            phase_trials = trials_df.loc[trials_df["Difficulty level"] == difficulty].copy()
+            phase_logs = logs_df.loc[logs_df["Difficulty level"] == difficulty].copy()
+
+            perceived_angle = pd.to_numeric(phase_trials[perc_angle_col], errors="coerce")
+            perceived_distance = pd.to_numeric(phase_trials[perc_dist_col], errors="coerce")
+
+            invalidated_mask = perceived_angle.eq(-1) | perceived_distance.eq(-1)
+            missed_mask = ~invalidated_mask & (perceived_angle.eq(0) | perceived_distance.eq(0))
+            valid_response_mask = ~invalidated_mask & perceived_angle.gt(0) & perceived_distance.gt(0)
+
+            valid_trials = phase_trials.loc[valid_response_mask].copy()
+
             if not valid_trials.empty:
-                correct = ((valid_trials['Angle'] == valid_trials[perc_angle_col]) &
-                           (valid_trials['Distance'] == valid_trials[perc_dist_col])).sum()
-                accuracy = correct / len(phase_trials)
+                actual_angle = pd.to_numeric(valid_trials["Angle"], errors="coerce")
+                actual_distance = pd.to_numeric(valid_trials["Distance"], errors="coerce")
+                valid_perceived_angle = pd.to_numeric(valid_trials[perc_angle_col], errors="coerce")
+                valid_perceived_distance = pd.to_numeric(valid_trials[perc_dist_col], errors="coerce")
+
+                correct_mask = (
+                    actual_angle.eq(valid_perceived_angle)
+                    & actual_distance.eq(valid_perceived_distance)
+                )
+
+                accuracy = correct_mask.sum() / len(valid_trials)
             else:
                 accuracy = np.nan
 
-            # 2. Perception: Reaction Speed (using Reaction Time)
-            valid_rt = phase_trials[phase_trials['Response start'] > 0]
-            avg_rt = (valid_rt['Response start'] - valid_rt['Phase timestamp']).mean() if not valid_rt.empty else np.nan
+            n_missed = int(missed_mask.sum())
+            n_valid_responses = int(valid_response_mask.sum())
+            n_analyzable_trials = n_missed + n_valid_responses
+            miss_rate = n_missed / n_analyzable_trials if n_analyzable_trials > 0 else np.nan
 
-            # 3. Motor: Obstacle Avoidance (New collisions during this specific phase)
-            collisions = phase_logs['Number of collision'].iloc[-1] - phase_logs['Number of collision'].iloc[0]
+            response_start = pd.to_numeric(phase_trials["Response start"], errors="coerce")
+            phase_timestamp = pd.to_numeric(phase_trials["Phase timestamp"], errors="coerce")
+            valid_rt_mask = response_start.gt(0)
 
-            # 4. Motor: Joystick Behavior (Control effort / variance)
-            joystick_var = phase_logs['Thumbstick x'].var()
+            avg_rt = (
+                (response_start.loc[valid_rt_mask] - phase_timestamp.loc[valid_rt_mask]).mean()
+                if valid_rt_mask.any()
+                else np.nan
+            )
 
-            # 5. Motor: Head Movement (Variance of X-axis head rotation)
-            # Parses the "(x,y,z)" string format to extract the first float
+            if not phase_logs.empty and "Number of collision" in phase_logs.columns:
+                collision_values = pd.to_numeric(phase_logs["Number of collision"], errors="coerce").dropna()
+                collisions = collision_values.iloc[-1] - collision_values.iloc[0] if len(collision_values) >= 2 else np.nan
+            else:
+                collisions = np.nan
+
+            if not phase_logs.empty and "Thumbstick x" in phase_logs.columns:
+                thumbstick_x = pd.to_numeric(phase_logs["Thumbstick x"], errors="coerce")
+                joystick_var = thumbstick_x.var()
+            else:
+                joystick_var = np.nan
+
             try:
-                head_x = phase_logs['Head rotation'].str.strip('()').str.split(',', expand=True)[0].astype(float)
-                head_var = head_x.var()
+                head_x = phase_logs["Head rotation"].astype(str).str.strip("()").str.split(",", expand=True)[0]
+                head_var = pd.to_numeric(head_x, errors="coerce").var()
             except Exception:
                 head_var = np.nan
 
             metrics_list.append({
-                'Subject': subject_id,
-                'Difficulty': difficulty,
-                'Accuracy': accuracy,
-                'Reaction Time': avg_rt,
-                'Collisions': collisions,
-                'Joystick Variance': joystick_var,
-                'Head Variance': head_var
+                "Subject": subject_id,
+                "Gender": participant_gender,
+                "Difficulty": difficulty,
+                "Accuracy": accuracy,
+                "Miss Rate": miss_rate,
+                "Reaction Time": avg_rt,
+                "Collisions": collisions,
+                "Joystick Variance": joystick_var,
+                "Head Variance": head_var,
+                "Missed Trials": n_missed,
+                "Valid Response Trials": n_valid_responses,
+                "Invalidated Trials": int(invalidated_mask.sum()),
+                "Analyzable Trials": n_analyzable_trials
             })
 
     metrics_df = pd.DataFrame(metrics_list)
 
-    # --- Normalization and Visualization ---
-    cols_to_norm = ['Accuracy', 'Reaction Time', 'Collisions', 'Joystick Variance', 'Head Variance']
+    if metrics_df.empty:
+        raise ValueError("No valid attention-redistribution data was found.")
+
+    metrics_to_test = ["Accuracy", "Miss Rate", "Head Variance", "Reaction Time", "Joystick Variance", "Collisions"]
+    difficulty_pairs = [("easy", "medium"), ("medium", "hard"), ("easy", "hard")]
+
+    print("\n" + "=" * 80)
+    print("STATISTICAL SIGNIFICANCE TESTS (Difficulty Levels)")
+    print("=" * 80)
+
+    pivot_df = metrics_df.pivot(index="Subject", columns="Difficulty", values=metrics_to_test)
+
+    for metric in metrics_to_test:
+        print(f"\n--- Metric: {metric} ---")
+
+        for diff1, diff2 in difficulty_pairs:
+            paired_data = pivot_df[metric][[diff1, diff2]].dropna()
+
+            if not paired_data.empty:
+                try:
+                    w_stat, w_p = wilcoxon(
+                        paired_data[diff1],
+                        paired_data[diff2],
+                        alternative="two-sided"
+                    )
+                    w_p_str = f"{w_p:.4f}"
+                except ValueError:
+                    w_stat, w_p_str = np.nan, "N/A"
+            else:
+                w_stat, w_p_str = np.nan, "N/A"
+
+            group1 = metrics_df.loc[metrics_df["Difficulty"] == diff1, metric].dropna()
+            group2 = metrics_df.loc[metrics_df["Difficulty"] == diff2, metric].dropna()
+
+            if not group1.empty and not group2.empty:
+                mw_stat, mw_p = mannwhitneyu(group1, group2, alternative="two-sided")
+                mw_p_str = f"{mw_p:.4f}"
+            else:
+                mw_stat, mw_p_str = np.nan, "N/A"
+
+            print(f"  {diff1.capitalize()} vs {diff2.capitalize()}:")
+            print(f"    Wilcoxon (Paired)      : W = {w_stat:<6.1f} | p = {w_p_str}")
+            print(f"    Mann-Whitney (Unpaired): U = {mw_stat:<6.1f} | p = {mw_p_str}")
+
+    print("=" * 80 + "\n")
+
+    cols_to_norm = ["Accuracy", "Miss Rate", "Reaction Time", "Collisions", "Joystick Variance", "Head Variance"]
     norm_df = metrics_df.copy()
+    custom_palette = dict(zip(cols_to_norm, sns.color_palette("tab10", len(cols_to_norm))))
 
-    # Z-score normalization for direct comparison of trends
     for col in cols_to_norm:
-        norm_df[col] = (norm_df[col] - norm_df[col].mean()) / norm_df[col].std()
+        column_std = norm_df[col].std()
+        norm_df[col] = (
+            (norm_df[col] - norm_df[col].mean()) / column_std
+            if pd.notna(column_std) and column_std != 0
+            else np.nan
+        )
 
-    avg_metrics = norm_df.groupby('Difficulty')[cols_to_norm].mean().reindex(['easy', 'medium', 'hard'])
+    melted_df = norm_df.melt(
+        id_vars=["Subject", "Gender", "Difficulty"],
+        value_vars=cols_to_norm,
+        var_name="Variable",
+        value_name="Z-Score"
+    )
+
+    melted_df["Difficulty"] = pd.Categorical(
+        melted_df["Difficulty"],
+        categories=difficulty_order,
+        ordered=True
+    )
 
     standalone = ax is None
+
     if standalone:
-        fig, ax = plt.subplots(figsize=(10, 6))
+        fig, ax = plt.subplots(figsize=(11, 6.5))
 
-    sns.lineplot(data=avg_metrics, markers=True, dashes=False, linewidth=2.5, ax=ax)
+    sns.pointplot(
+        data=melted_df,
+        x="Difficulty",
+        y="Z-Score",
+        hue="Variable",
+        hue_order=cols_to_norm,
+        order=difficulty_order,
+        palette=custom_palette,
+        dodge=0.3,
+        linestyles="-",
+        errorbar=("ci", 95),
+        capsize=0.05,
+        ax=ax
+    )
 
-    ax.set_title('Shift in Attention Allocation Across Difficulty Levels (Z-Scored)', fontsize=14, pad=15)
-    ax.set_ylabel('Normalized Metric Value (Z-Score)', fontsize=12)
-    ax.set_xlabel('Task Difficulty (Workload)', fontsize=12)
-    ax.legend(title='Variables', bbox_to_anchor=(1.05, 1), loc='upper left')
+    metrics_to_annotate = ["Accuracy", "Miss Rate", "Collisions", "Joystick Variance"]
+    bbox_props = dict(boxstyle="round,pad=0.2", facecolor="white", edgecolor="none", alpha=0.85)
+
+    for metric in metrics_to_annotate:
+        color = custom_palette[metric]
+        annotation_segments = [("easy", "medium", 0, 1), ("medium", "hard", 1, 2)]
+
+        if metric == "Accuracy":
+            annotation_segments.append(("easy", "hard", 0, 2))
+
+        for diff1, diff2, x1, x2 in annotation_segments:
+            paired_data = pivot_df[metric][[diff1, diff2]].dropna()
+
+            if len(paired_data) <= 1:
+                continue
+
+            try:
+                _, p_val = wilcoxon(
+                    paired_data[diff1],
+                    paired_data[diff2],
+                    alternative="two-sided"
+                )
+            except ValueError:
+                continue
+
+            p_str = "p<0.001" if p_val < 0.001 else f"p={p_val:.3f}"
+
+            y1 = melted_df.loc[
+                (melted_df["Variable"] == metric) & (melted_df["Difficulty"] == diff1),
+                "Z-Score"
+            ].mean()
+
+            y2 = melted_df.loc[
+                (melted_df["Variable"] == metric) & (melted_df["Difficulty"] == diff2),
+                "Z-Score"
+            ].mean()
+
+            if pd.isna(y1) or pd.isna(y2):
+                continue
+
+            if diff1 == "easy" and diff2 == "hard":
+                y_mid = melted_df.loc[
+                    (melted_df["Variable"] == metric) & (melted_df["Difficulty"] == "medium"),
+                    "Z-Score"
+                ].mean()
+
+                y_values = [value for value in [y1, y2, y_mid] if pd.notna(value)]
+                x_pos = 1.0
+                y_pos = max(y_values) + 0.35
+                p_str = f"Easy vs Hard: {p_str}"
+            else:
+                x_pos = (x1 + x2) / 2
+                y_pos = (y1 + y2) / 2
+
+            ax.text(
+                x_pos,
+                y_pos + 0.1,
+                p_str,
+                color=color,
+                ha="center",
+                va="bottom",
+                fontsize=9,
+                fontweight="bold",
+                bbox=bbox_props,
+                zorder=10
+            )
+
+    participant_count = melted_df["Subject"].nunique()
+
+    # ax.set_title(f"All Participants (N = {participant_count})", fontsize=13, pad=12)
+    # ax.set_xlabel("Task Difficulty", fontsize=11)
+    ax.set_ylabel("Normalized Metric Value (Z-Score)", fontsize=11)
     ax.grid(True, alpha=0.3)
 
-    if standalone:
-        plt.tight_layout()
-        plt.show()
+    legend = ax.get_legend()
 
-    return metrics_df
+    if legend is not None:
+        legend.set_title("Variable")
+        legend.set_bbox_to_anchor((1.03, 1))
+        legend._loc = 2
+
+    if standalone:
+        # fig.suptitle("Shift in Attention Allocation Across Difficulty Levels", fontsize=15, fontweight="bold")
+        fig.tight_layout()
+        plt.show()
+    fig.savefig('across_difficulty.pdf', format='pdf', bbox_inches='tight')
 
 
 def plot_cognitive_signatures_heatmap(subjects_data_trials, experiment_logs_all, num_clusters=4):
@@ -1203,7 +1552,7 @@ def analyze_latent_strategies(subjects_data_trials, experiment_logs_all, n_clust
     return profiles_df, strategy_profiles
 
 
-def plot_collision_vs_accuracy(perception_results_all, experiment_logs_all, ax=None):
+def plot_collision_vs_accuracy(perception_results_all, experiment_logs_all, color_palette, ax=None):
     """
     Plots the relationship between Cue Perception Accuracy and
     the Number of Collisions during the cue windows, categorized by modality.
@@ -1266,7 +1615,7 @@ def plot_collision_vs_accuracy(perception_results_all, experiment_logs_all, ax=N
 
     # تنظیمات استایل پلات
     sns.set_theme(style="whitegrid", context="paper", font_scale=1.2)
-    palette = {'Visual': '#4C72B0', 'Auditory': '#55A868', 'Haptic': '#C44E52'}
+    palette = {mod.capitalize(): color for mod, color in color_palette.items()}
 
     standalone = ax is None
     if standalone:
@@ -1313,7 +1662,7 @@ def plot_collision_vs_accuracy(perception_results_all, experiment_logs_all, ax=N
     return df
 
 
-def test_mrt_interaction(subjects_data_trials, experiment_logs_all, axes=None):
+def test_mrt_interaction(perception_results_all, experiment_logs_all, color_palette, axes=None):
     """
     Evaluates Multiple Resource Theory by plotting the Modality x Difficulty interaction
     for Reaction Time, Angular Error, and Cue-Window Collisions.
@@ -1324,8 +1673,8 @@ def test_mrt_interaction(subjects_data_trials, experiment_logs_all, axes=None):
     """
     interaction_data = []
 
-    for subject_id in subjects_data_trials.keys():
-        trials_df = subjects_data_trials.get(subject_id)
+    for subject_id in perception_results_all.keys():
+        trials_df = perception_results_all.get(subject_id)
         logs_df = experiment_logs_all.get(subject_id)
 
         if trials_df is None or trials_df.empty or logs_df is None or logs_df.empty:
@@ -1389,7 +1738,7 @@ def test_mrt_interaction(subjects_data_trials, experiment_logs_all, axes=None):
     if standalone:
         fig, axes = plt.subplots(1, 3, figsize=(16, 5))
 
-    palette = {'Visual': '#4C72B0', 'Auditory': '#55A868', 'Haptic': '#C44E52'}
+    palette = {mod.capitalize(): color for mod, color in color_palette.items()}
     markers = {'Visual': 'o', 'Auditory': 's', 'Haptic': '^'}
 
     # Plot 1: Reaction Time
@@ -1423,12 +1772,12 @@ def test_mrt_interaction(subjects_data_trials, experiment_logs_all, axes=None):
     return df_interaction
 
 
-def plot_accuracy_over_time_by_modality(subjects_data_trials):
-    """Plots longitudinal accuracy trends by modality (auditory, haptic, visual) using the Set2 palette, excluding invalid/missed trials."""
+def plot_accuracy_over_time_by_modality(perception_results_all, color_palette):
+    """Plots longitudinal accuracy trends by modality (auditory, haptic, visual), excluding invalid/missed trials."""
 
     all_trials = []
 
-    for subject_id, df in subjects_data_trials.items():
+    for subject_id, df in perception_results_all.items():
         if df is None or df.empty:
             continue
 
@@ -1452,13 +1801,7 @@ def plot_accuracy_over_time_by_modality(subjects_data_trials):
     sns.set_theme(style="whitegrid", context="paper", font_scale=1.2)
     fig, axes = plt.subplots(2, 1, figsize=(14, 10), sharex=True)
 
-    # Extract Set2 colors and map them to the desired order
-    set2_colors = sns.color_palette("Set2")
-    palette = {
-        'auditory': set2_colors[0],
-        'haptic': set2_colors[1],
-        'visual': set2_colors[2]
-    }
+    palette = color_palette
     modality_order = ['auditory', 'haptic', 'visual']
 
     sns.lineplot(
@@ -1537,14 +1880,14 @@ def plot_accuracy_over_time_by_modality(subjects_data_trials):
     return combined_df
 
 
-def plot_longitudinal_performance(subjects_data_trials, experiment_logs_all):
+def plot_longitudinal_performance(perception_results_all, experiment_logs_all, color_palette):
     """
     Plots longitudinal trends of miss rate, angular accuracy, distance accuracy,
     and collisions from trial 1 to 216 without confidence interval shading.
     """
     all_trials = []
 
-    for subject_id, df in subjects_data_trials.items():
+    for subject_id, df in perception_results_all.items():
         if df is None or df.empty:
             continue
 
@@ -1601,8 +1944,7 @@ def plot_longitudinal_performance(subjects_data_trials, experiment_logs_all):
     sns.set_theme(style="whitegrid", context="paper", font_scale=1.2)
     fig, axes = plt.subplots(4, 1, figsize=(14, 18), sharex=True)
 
-    set2_colors = sns.color_palette("Set2")
-    palette = {'auditory': set2_colors[0], 'haptic': set2_colors[1], 'visual': set2_colors[2]}
+    palette = color_palette
     modality_order = ['auditory', 'haptic', 'visual']
 
     # Plot 1: Miss Rate (Separated by Modality)
@@ -1680,146 +2022,290 @@ def plot_longitudinal_performance(subjects_data_trials, experiment_logs_all):
     return combined_df
 
 
-def plot_gender_differences_by_modality(perception_results_all, experiment_logs_all, demographics_path):
+def plot_performance_by_condition(perception_results_all, experiment_logs_all, color_palette, axes=None):
     """
-        Calculates subject-level performance metrics broken down by modality,
-        and plots them alongside the final total collisions for each gender.
-        """
+    Calculates subject-level performance metrics broken down by Modality and Difficulty.
+    Plots them in a 2x4 grid, annotating all with paired Wilcoxon signed-rank p-values.
+    """
+    # --- Part A: Extract Modality & Difficulty Metrics ---
+    mod_metrics = []
+    diff_metrics = []
 
-    # 1. Load demographics
-    demo_df = pd.read_csv(demographics_path)
-    demo_df['Folder_Name'] = list(perception_results_all.keys())
-
-    # --- Part A: Extract Modality Metrics (Miss Rate & Accuracies) ---
-    subject_metrics = []
-
-    for subject_folder, df in perception_results_all.items():
+    for subject, df in perception_results_all.items():
         if df is None or df.empty:
             continue
 
         df_copy = df.copy()
         perc_angle_col = 'Angle perceived' if 'Angle perceived' in df_copy.columns else 'Perceived angle'
         perc_dist_col = 'Distance perceived' if 'Distance perceived' in df_copy.columns else 'Perceived distance'
+        dist_col = 'Distance' if 'Distance' in df_copy.columns else 'Distnce'
 
         # Filter out hardware faults (-1)
         df_copy = df_copy[df_copy[perc_angle_col] >= 0].copy()
-        df_copy['Modality'] = df_copy['Modality'].str.capitalize()
 
+        if 'Modality' in df_copy.columns:
+            df_copy['Modality'] = df_copy['Modality'].astype(str).str.strip().str.capitalize()
+        if 'Difficulty level' in df_copy.columns:
+            df_copy['Difficulty level'] = df_copy['Difficulty level'].astype(str).str.strip().str.capitalize()
+
+        # 1. Extract Modality Metrics
         for mod in ['Visual', 'Auditory', 'Haptic']:
+            if 'Modality' not in df_copy.columns: break
             mod_df = df_copy[df_copy['Modality'] == mod]
-
-            if mod_df.empty:
-                continue
+            if mod_df.empty: continue
 
             miss_rate = (mod_df[perc_angle_col] == 0).mean()
             valid_trials = mod_df[(mod_df[perc_angle_col] > 0) & (mod_df[perc_dist_col] > 0)]
 
             if not valid_trials.empty:
                 ang_acc = (valid_trials['Angle'] == valid_trials[perc_angle_col]).mean()
-                dist_acc = (valid_trials['Distance'] == valid_trials[perc_dist_col]).mean()
+                dist_acc = (valid_trials[dist_col] == valid_trials[perc_dist_col]).mean()
+                total_acc = ((valid_trials['Angle'] == valid_trials[perc_angle_col]) &
+                             (valid_trials[dist_col] == valid_trials[perc_dist_col])).mean()
             else:
-                ang_acc = np.nan
-                dist_acc = np.nan
+                ang_acc, dist_acc, total_acc = np.nan, np.nan, np.nan
 
-            subject_metrics.append({
-                'Folder_Name': subject_folder,
-                'Modality': mod,
-                'Miss Rate': miss_rate,
-                'Angular Accuracy': ang_acc,
-                'Distance Accuracy': dist_acc
-            })
+            mod_metrics.append({'Subject': subject, 'Modality': mod, 'Miss Rate': miss_rate,
+                                'Angular Accuracy': ang_acc, 'Distance Accuracy': dist_acc,
+                                'Total Accuracy': total_acc})
 
-    metrics_df = pd.DataFrame(subject_metrics)
-    merged_df = pd.merge(metrics_df, demo_df, on='Folder_Name', how='inner')
-    merged_df = merged_df.dropna(subset=['Gender'])
-    merged_df['Gender'] = merged_df['Gender'].str.capitalize()
+        # 2. Extract Difficulty Metrics (Including Total Accuracy)
+        for diff in ['Easy', 'Medium', 'Hard']:
+            if 'Difficulty level' not in df_copy.columns: break
+            diff_df = df_copy[df_copy['Difficulty level'] == diff]
+            if diff_df.empty: continue
 
-    # Composite group for the X-axis (e.g., 'Visual\nMale')
-    merged_df['Group'] = merged_df['Modality'] + '\n' + merged_df['Gender']
+            miss_rate = (diff_df[perc_angle_col] == 0).mean()
+            valid_trials = diff_df[(diff_df[perc_angle_col] > 0) & (diff_df[perc_dist_col] > 0)]
 
-    # --- Part B: Extract Final Collisions Metric ---
-    collision_metrics = []
+            if not valid_trials.empty:
+                ang_acc = (valid_trials['Angle'] == valid_trials[perc_angle_col]).mean()
+                dist_acc = (valid_trials[dist_col] == valid_trials[perc_dist_col]).mean()
+                total_acc = ((valid_trials['Angle'] == valid_trials[perc_angle_col]) &
+                             (valid_trials[dist_col] == valid_trials[perc_dist_col])).mean()
+            else:
+                ang_acc, dist_acc, total_acc = np.nan, np.nan, np.nan
 
-    for subject_folder, logs_df in experiment_logs_all.items():
-        if logs_df is None or logs_df.empty or 'Number of collision' not in logs_df.columns:
-            final_col = np.nan
-        else:
-            # Drop trailing NaNs to ensure we get the last valid collision integer
-            valid_logs = logs_df.dropna(subset=['Number of collision'])
-            final_col = valid_logs['Number of collision'].iloc[-1] if not valid_logs.empty else np.nan
+            diff_metrics.append({'Subject': subject, 'Difficulty': diff, 'Miss Rate': miss_rate,
+                                 'Angular Accuracy': ang_acc, 'Distance Accuracy': dist_acc,
+                                 'Total Accuracy': total_acc})
 
-        collision_metrics.append({
-            'Folder_Name': subject_folder,
-            'Final Collisions': final_col
-        })
+    df_mod = pd.DataFrame(mod_metrics)
+    df_diff = pd.DataFrame(diff_metrics)
 
-    col_df = pd.DataFrame(collision_metrics)
-    demo_col_df = pd.merge(col_df, demo_df, on='Folder_Name', how='inner')
-    demo_col_df = demo_col_df.dropna(subset=['Gender'])
-    demo_col_df['Gender'] = demo_col_df['Gender'].str.capitalize()
+    # --- Helper Function for Statistical Annotation (Wilcoxon Signed-Rank) ---
+    def annotate_wilcoxon(ax, data, metric, condition_col, pairs, order):
+        # Pivot to align subject data into perfectly matched pairs
+        pivot_df = data.pivot(index='Subject', columns=condition_col, values=metric)
+
+        y_max = data[metric].max()
+        y_range = data[metric].max() - data[metric].min()
+        if pd.isna(y_range) or y_range == 0: y_range = 0.1
+
+        # Expand Y-axis to make room for 3 stacked brackets
+        ax.set_ylim(ax.get_ylim()[0], ax.get_ylim()[1] + y_range * 0.35)
+
+        for i, (c1, c2) in enumerate(pairs):
+            p_text = "N/A"
+            if c1 in pivot_df.columns and c2 in pivot_df.columns:
+                paired_data = pivot_df[[c1, c2]].dropna()
+                if len(paired_data) > 1:
+                    # Wilcoxon requires the differences between pairs to be non-zero
+                    diffs = paired_data[c1] - paired_data[c2]
+                    if not (diffs == 0).all():
+                        stat, p = wilcoxon(paired_data[c1], paired_data[c2], alternative='two-sided')
+                        p_text = f"p={p:.3f}" if p >= 0.001 else "p<0.001"
+
+            x1 = order.index(c1)
+            x2 = order.index(c2)
+
+            # Stack brackets vertically
+            bracket_y = y_max + y_range * 0.05 + (i * y_range * 0.1)
+            bracket_h = y_range * 0.02
+            ax.plot([x1, x1, x2, x2], [bracket_y, bracket_y + bracket_h, bracket_y + bracket_h, bracket_y], lw=1.2,
+                    color='k')
+
+            if p_text != "N/A":
+                # Safely strip text for float comparison to avoid crashing on 'p<0.001'
+                clean_p_val = p_text.replace('p', '').replace('=', '').replace('<', '').strip()
+                weight = 'bold' if float(clean_p_val) < 0.05 else 'normal'
+            else:
+                weight = 'normal'
+
+            ax.text((x1 + x2) / 2, bracket_y + bracket_h, p_text, ha='center', va='bottom', color='k', fontsize=10,
+                    fontweight=weight)
 
     # --- Plotting ---
     sns.set_theme(style="whitegrid", context="paper", font_scale=1.2)
-    fig, axes = plt.subplots(1, 4, figsize=(24, 6))
+    standalone = axes is None
+    if standalone:
+        fig, axes = plt.subplots(2, 4, figsize=(24, 12))
 
-    # Ordering and Palette for Modality Plots (Subplots 1-3)
-    x_order_modality = [
-        'Visual\nMale', 'Visual\nFemale',
-        'Auditory\nMale', 'Auditory\nFemale',
-        'Haptic\nMale', 'Haptic\nFemale'
-    ]
+    axes = axes.flatten() if standalone else np.array(axes).flatten()
 
-    custom_palette = {
-        'Visual\nMale': '#99DDFF', 'Visual\nFemale': '#99DDFF',
-        'Auditory\nMale': '#BBCC33', 'Auditory\nFemale': '#BBCC33',
-        'Haptic\nMale': '#EE8866', 'Haptic\nFemale': '#EE8866'
+    mod_order = ['Visual', 'Auditory', 'Haptic']
+    diff_order = ['Easy', 'Medium', 'Hard']
+
+    palette_mod = {mod: color_palette[mod.lower()] for mod in mod_order}
+    palette_diff = {diff: color_palette[diff.lower()] for diff in diff_order}
+
+    mod_pairs = [('Visual', 'Auditory'), ('Auditory', 'Haptic'), ('Visual', 'Haptic')]
+    diff_pairs = [('Easy', 'Medium'), ('Medium', 'Hard'), ('Easy', 'Hard')]
+
+    # -----------------------------------------------
+    # Plot Row 1 (axes 0-3): Modality Metrics
+    # -----------------------------------------------
+    modality_metrics = ['Miss Rate', 'Angular Accuracy', 'Distance Accuracy', 'Total Accuracy']
+    for i, metric in enumerate(modality_metrics):
+        if not df_mod.empty and metric in df_mod.columns:
+            sns.boxplot(data=df_mod, x='Modality', y=metric, order=mod_order, palette=palette_mod, ax=axes[i],
+                        showmeans=True,
+                        meanprops={"marker": "o", "markerfacecolor": "white", "markeredgecolor": "black"})
+            sns.stripplot(data=df_mod, x='Modality', y=metric, order=mod_order, palette=palette_mod, ax=axes[i],
+                          alpha=0.6, jitter=True, edgecolor='gray', linewidth=0.5)
+
+            axes[i].set_title(f'{metric}\n(by Modality)', fontweight='bold', fontsize=13)
+            axes[i].set_xlabel('')
+            axes[i].set_ylabel(metric, fontweight='bold')
+
+            annotate_wilcoxon(axes[i], df_mod, metric, 'Modality', mod_pairs, mod_order)
+
+    # -----------------------------------------------
+    # Plot Row 2 (axes 4-7): Difficulty Metrics
+    # -----------------------------------------------
+    difficulty_metrics = ['Miss Rate', 'Angular Accuracy', 'Distance Accuracy', 'Total Accuracy']
+    for j, metric in enumerate(difficulty_metrics):
+        idx = j + 4
+        if not df_diff.empty and metric in df_diff.columns:
+            sns.boxplot(data=df_diff, x='Difficulty', y=metric, order=diff_order, palette=palette_diff, ax=axes[idx],
+                        showmeans=True,
+                        meanprops={"marker": "o", "markerfacecolor": "white", "markeredgecolor": "black"})
+            sns.stripplot(data=df_diff, x='Difficulty', y=metric, order=diff_order, palette=palette_diff, ax=axes[idx],
+                          alpha=0.6, jitter=True, edgecolor='gray', linewidth=0.5)
+
+            axes[idx].set_title(f'{metric}\n(by Difficulty)', fontweight='bold', fontsize=13)
+            axes[idx].set_xlabel('')
+            axes[idx].set_ylabel(metric, fontweight='bold')
+
+            annotate_wilcoxon(axes[idx], df_diff, metric, 'Difficulty', diff_pairs, diff_order)
+
+    if standalone:
+        plt.tight_layout(pad=2.0)
+        plt.show()
+
+
+
+
+
+
+
+
+
+
+
+
+
+def plot_analysis_dashboard(
+    windows_list,
+    perception_results_all,
+    experiment_logs_all,
+    error_distribution,
+    demographics_path,
+    color_palette,
+):
+    """
+    Combines seven standalone analysis plots into a single dashboard figure,
+    each rendered as its own row of subplots:
+
+      1. plot_timing_metrics                   (2 subplots)
+      2. plot_multiple_collision_time_windows  (3 stacked subplots)
+      3. plot_error_boxplots_temp              (1 subplot)
+      4. analyze_attention_redistribution      (1 subplot)
+      5. plot_collision_vs_accuracy            (1 subplot)
+      6. test_mrt_interaction                  (3 subplots)
+      7. plot_gender_differences_by_modality   (4 subplots)
+
+    `perception_results_all` is the per-trial perception data (dict keyed by
+    subject) and `experiment_logs_all` is the continuous per-subject
+    experiment log data. These are the same dictionaries you already pass to
+    the individual functions elsewhere (previously known as
+    `subjects_data_trials` and `subjects_data_full`, respectively).
+
+    `color_palette` is the shared {'visual': ..., 'auditory': ..., 'haptic':
+    ...} color mapping (defined under `__main__`) used consistently across
+    every modality-colored plot in this dashboard.
+
+    Each row is built as its own Matplotlib subfigure so every underlying
+    function can keep laying out its own axes exactly as it does when called
+    on its own.
+
+    Returns a dict with the intermediate DataFrames produced by the
+    sub-functions that return data.
+    """
+    sns.set_theme(style="whitegrid")
+
+    fig = plt.figure(figsize=(22, 42))
+
+    height_ratios = [1, 3, 1, 1, 1, 1, 1.3]
+    row_widths = [0.5, 1.00, 1.00, 1.00, 0.4, 0.75, 1.00]
+
+    outer_grid = fig.add_gridspec(7, 100, height_ratios=height_ratios, hspace=0.18)
+    subfigs = []
+
+    for row, width in enumerate(row_widths):
+        number_columns = int(width * 100)
+        start_column = (100 - number_columns) // 2
+        end_column = start_column + number_columns
+        subfigs.append(fig.add_subfigure(outer_grid[row, start_column:end_column]))
+    # 1. Response/reaction timing by modality
+    axes0 = subfigs[0].subplots(1, 2)
+    plot_timing_metrics(perception_results_all, color_palette, axes=axes0)
+    subfigs[0].suptitle('Response and Reaction Time by Modality', fontweight='bold', fontsize=14)
+
+    # 2. Collisions across time windows (3 stacked rows)
+    axes1 = subfigs[1].subplots(3, 1, sharex=True, sharey=True)
+    plot_multiple_collision_time_windows(windows_list, experiment_logs_all, perception_results_all, color_palette, axes=axes1)
+    subfigs[1].suptitle('Collisions Across Time Windows by Modality', fontweight='bold', fontsize=14)
+
+    # 3. Error distribution boxplots
+    ax2 = subfigs[2].subplots(1, 1)
+    plot_error_boxplots_temp(error_distribution, color_palette, ax=ax2)
+    subfigs[2].suptitle('Error Distribution by Modality', fontweight='bold', fontsize=14)
+
+    # 4. Attention redistribution across difficulty levels
+    demographics = pd.read_csv(demographics_path)
+
+    axes3 = subfigs[3].subplots(1, 3, sharex=True, sharey=True)
+    attention_df = analyze_attention_redistribution(perception_results_all, experiment_logs_all, demographics,axes=axes3)
+    subfigs[3].suptitle('Attention Allocation Across Difficulty Levels', fontweight='bold', fontsize=14)
+
+    # 5. Collision rate vs. accuracy
+    ax4 = subfigs[4].subplots(1, 1)
+    collision_acc_df = plot_collision_vs_accuracy(perception_results_all, experiment_logs_all, color_palette, ax=ax4)
+    subfigs[4].suptitle('Collision Rate vs. Accuracy by Modality', fontweight='bold', fontsize=14)
+
+    # 6. MRT (Modality x Difficulty) interaction
+    axes5 = subfigs[5].subplots(1, 3)
+    mrt_df = test_mrt_interaction(perception_results_all, experiment_logs_all, color_palette, axes=axes5)
+    subfigs[5].suptitle('Dual-Task Interference: Multiple Resource Theory Evaluation', fontweight='bold', fontsize=14)
+
+    # 7. Gender differences by modality
+    axes6 = subfigs[6].subplots(1, 4)
+    gender_df, gender_collision_df = plot_gender_differences_by_modality(
+        perception_results_all, experiment_logs_all, demographics_path, color_palette, axes=axes6
+    )
+    subfigs[6].suptitle('Gender Differences by Modality', fontweight='bold', fontsize=14)
+
+    plt.show()
+    fig.savefig('comprehensive_results.pdf', format='pdf', bbox_inches='tight')
+    return {
+        'attention_metrics': attention_df,
+        'mrt_interaction': mrt_df,
+        'collision_vs_accuracy': collision_acc_df,
+        'gender_modality_metrics': gender_df,
+        'gender_final_collisions': gender_collision_df,
     }
 
-    metrics_to_plot = ['Miss Rate', 'Angular Accuracy', 'Distance Accuracy']
-
-    for i, metric in enumerate(metrics_to_plot):
-        sns.boxplot(
-            data=merged_df, x='Group', y=metric, order=x_order_modality,
-            palette=custom_palette, ax=axes[i], showmeans=True,
-            meanprops={"marker": "o", "markerfacecolor": "white", "markeredgecolor": "black", "markersize": "6"}
-        )
-
-        sns.stripplot(
-            data=merged_df, x='Group', y=metric, order=x_order_modality,
-            palette=custom_palette, ax=axes[i], alpha=0.6, jitter=True,
-            edgecolor='gray', linewidth=0.5
-        )
-
-        axes[i].set_title(f'{metric} by Gender & Modality', fontweight='bold', fontsize=14)
-        axes[i].set_xlabel('', fontweight='bold')
-        axes[i].set_ylabel(f'Mean {metric}', fontweight='bold')
-        axes[i].axvline(1.5, color='gray', linestyle=':', alpha=0.7)
-        axes[i].axvline(3.5, color='gray', linestyle=':', alpha=0.7)
-
-    # --- Subplot 4: Final Collisions ---
-    # Distinct palette for overall Gender comparison
-    gender_palette = {'Male': '#B0C4DE', 'Female': '#FFB6C1'}
-
-    sns.boxplot(
-        data=demo_col_df, x='Gender', y='Final Collisions', order=['Male', 'Female'],
-        palette=gender_palette, ax=axes[3], showmeans=True, width=0.4,
-        meanprops={"marker": "o", "markerfacecolor": "white", "markeredgecolor": "black", "markersize": "6"}
-    )
-
-    sns.stripplot(
-        data=demo_col_df, x='Gender', y='Final Collisions', order=['Male', 'Female'],
-        palette=gender_palette, ax=axes[3], alpha=0.6, jitter=True,
-        edgecolor='gray', linewidth=0.5
-    )
-
-    axes[3].set_title('Final Total Collisions by Gender', fontweight='bold', fontsize=14)
-    axes[3].set_xlabel('', fontweight='bold')
-    axes[3].set_ylabel('Total Collisions', fontweight='bold')
-
-    plt.tight_layout(pad=3.0)
-    plt.show()
-
-    return merged_df, demo_col_df
 
 def plot_gender_differences(perception_results_all, demographics_path):
     """
@@ -1976,6 +2462,1409 @@ def test_gender_differences(merged_df, metrics_to_test=None):
                 print(f"{g1} vs {g2}: Insufficient data for testing (n=0 for one or both groups).")
 
     print("=" * 60 + "\n")
+
+
+def plot_polar_accuracy_by_modality(perception_results_all, color_palette, ax=None):
+    """
+    Calculates the Polar Accuracy for each trial based on Euclidean distance,
+    aggregates by subject, and plots the distribution by Modality.
+    Annotated with paired Wilcoxon signed-rank p-values comparing modalities.
+    """
+    # 1. Safely combine perception data while preserving Participant ID
+    df_list = []
+    for pid, df in perception_results_all.items():
+        if df is not None and not df.empty:
+            df_copy = df.copy()
+            df_copy['Participant ID'] = pid
+            df_list.append(df_copy)
+
+    df_all = pd.concat(df_list, ignore_index=True)
+
+    perc_angle_col = 'Angle perceived' if 'Angle perceived' in df_all.columns else 'Perceived angle'
+    perc_dist_col = 'Distance perceived' if 'Distance perceived' in df_all.columns else 'Perceived distance'
+    dist_col = 'Distance' if 'Distance' in df_all.columns else 'Distnce'
+
+    # Filter out misses (0) and hardware faults (-1)
+    valid_df = df_all[df_all[perc_angle_col] > 0].copy()
+    valid_df['Modality'] = valid_df['Modality'].str.capitalize()
+
+    # 2. Calculate Polar Accuracy
+    # Convert angles to radians
+    theta_true = valid_df['Angle'] * (np.pi / 4)
+    theta_perc = valid_df[perc_angle_col] * (np.pi / 4)
+    r_true = valid_df[dist_col]
+    r_perc = valid_df[perc_dist_col]
+
+    # Law of Cosines (Euclidean Distance in Polar Coordinates)
+    valid_df['Geometric_Error'] = np.sqrt(
+        r_true ** 2 + r_perc ** 2 - 2 * r_true * r_perc * np.cos(theta_true - theta_perc)
+    )
+
+    # Convert to Accuracy Percentage
+    # Max possible Euclidean error is 2 * max_radius (opposite ends of the space)
+    r_max = max(r_true.max(), r_perc.max())
+    max_possible_error = 2 * r_max
+    valid_df['Polar_Accuracy'] = 100 * (1 - (valid_df['Geometric_Error'] / max_possible_error))
+
+    # 3. Aggregate to subject-level means
+    subject_means = valid_df.groupby(['Participant ID', 'Modality'])['Polar_Accuracy'].mean().reset_index()
+
+    modality_order = ['Visual', 'Auditory', 'Haptic']
+    palette_mod = {mod: color_palette[mod.lower()] for mod in modality_order}
+
+    # --- Calculate P-Values: Wilcoxon Signed-Rank (Paired) ---
+    wilcoxon_records = []
+    pairs_to_test = [('Visual', 'Auditory'), ('Auditory', 'Haptic'), ('Visual', 'Haptic')]
+    num_comparisons = len(pairs_to_test)
+
+    print("\n" + "=" * 60)
+    print("WILCOXON SIGNED-RANK (PAIRED) POLAR ACCURACY")
+    print("=" * 60)
+
+    # Pivot to align subjects for paired testing
+    pivot_df = subject_means.pivot(index='Participant ID', columns='Modality', values='Polar_Accuracy').dropna()
+
+    for mod1, mod2 in pairs_to_test:
+        if mod1 in pivot_df.columns and mod2 in pivot_df.columns:
+            paired_data = pivot_df[[mod1, mod2]].dropna()
+
+            if len(paired_data) > 1:
+                stat, raw_p = wilcoxon(paired_data[mod1], paired_data[mod2], alternative='two-sided')
+                bonferroni_p = min(raw_p * num_comparisons, 1.0)
+                wilcoxon_records.append({
+                    'Comparison': f"{mod1} vs {mod2}",
+                    'Bonferroni p': bonferroni_p
+                })
+                print(
+                    f"{mod1:<8} vs {mod2:<8} | N={len(paired_data):<2} | Raw p={raw_p:.4f} | Bonf p={bonferroni_p:.4f}")
+            else:
+                print(f"{mod1:<8} vs {mod2:<8} | Insufficient data.")
+
+    print("=" * 60 + "\n")
+    wilcoxon_df = pd.DataFrame(wilcoxon_records)
+
+    # --- Plotting ---
+    sns.set_theme(style="whitegrid", context="paper", font_scale=1.2)
+    standalone = ax is None
+    if standalone:
+        fig, ax = plt.subplots(figsize=(8, 6))
+
+    sns.boxplot(data=subject_means, x='Modality', y='Polar_Accuracy', order=modality_order,
+                palette=palette_mod, ax=ax, showfliers=False, width=0.5,
+                showmeans=True, meanprops={"marker": "o", "markerfacecolor": "white", "markeredgecolor": "black"})
+
+    sns.stripplot(data=subject_means, x='Modality', y='Polar_Accuracy', order=modality_order,
+                  palette=palette_mod, ax=ax, alpha=0.6, jitter=True, edgecolor='gray', linewidth=0.5)
+
+    ax.set_title('Polar Accuracy by Modality', fontweight='bold', fontsize=14, pad=20)
+    ax.set_ylabel('Mean Polar Accuracy (%)', fontweight='bold')
+    ax.set_xlabel('')
+
+    # Annotate Stats
+    ylim_max = subject_means['Polar_Accuracy'].max()
+    ylim_min = subject_means['Polar_Accuracy'].min()
+    y_range = ylim_max - ylim_min
+    if pd.isna(y_range) or y_range == 0: y_range = 10.0
+
+    # Expand Y-axis slightly for brackets
+    ax.set_ylim(max(0, ylim_min - y_range * 0.1), ylim_max + (y_range * 0.35))
+    y_base = ylim_max + (y_range * 0.05)
+    y_step = y_range * 0.08
+
+    for i, (mod1, mod2) in enumerate(pairs_to_test):
+        match = wilcoxon_df[wilcoxon_df['Comparison'] == f"{mod1} vs {mod2}"]
+        if match.empty:
+            continue
+
+        bonferroni_p = match['Bonferroni p'].values[0]
+        if bonferroni_p < 0.001:
+            p_text = "p < 0.001"
+        elif bonferroni_p < 0.05:
+            p_text = f"p = {bonferroni_p:.3f}"
+        else:
+            p_text = f"p = {bonferroni_p:.2f}"
+
+        x1 = modality_order.index(mod1)
+        x2 = modality_order.index(mod2)
+
+        y = y_base + (i * y_step)
+        h = y_range * 0.02
+
+        ax.plot([x1, x1, x2, x2], [y, y + h, y + h, y], lw=1.5, color='black')
+
+        weight = 'bold' if bonferroni_p < 0.05 else 'normal'
+        ax.text((x1 + x2) * 0.5, y + h + (y_range * 0.01), p_text,
+                ha='center', va='bottom', color='black', fontsize=11, fontweight=weight)
+
+    if standalone:
+        plt.tight_layout()
+        plt.show()
+
+
+
+
+
+
+
+
+
+def plot_modality_spider_chart(perception_results_all, color_palette, save_path=None):
+    """
+    Plots a publication-ready radar chart comparing 5 normalized metrics.
+    Optionally saves the figure at 300 DPI.
+    """
+    # 1. Safely combine data
+    df_list = []
+    for pid, df in perception_results_all.items():
+        if df is not None and not df.empty:
+            df_copy = df.copy()
+            df_list.append(df_copy)
+
+    df_all = pd.concat(df_list, ignore_index=True)
+
+    df_all['Modality'] = df_all['Modality'].str.lower()
+    perc_angle_col = 'Angle perceived' if 'Angle perceived' in df_all.columns else 'Perceived angle'
+    perc_dist_col = 'Distance perceived' if 'Distance perceived' in df_all.columns else 'Perceived distance'
+
+    clean_df = df_all[df_all[perc_angle_col] != -1].copy()
+    clean_df['Reaction time'] = clean_df['Response start'] - clean_df['Phase timestamp']
+    clean_df['Response duration'] = clean_df['Response end'] - clean_df['Response start']
+
+    modalities = ['auditory', 'haptic', 'visual']
+    metrics_data = {mod: [] for mod in modalities}
+
+    # Upper limits for normalization (Adjust based on your session maximums)
+    MAX_REACTION_TIME = 8.52  # seconds
+    MAX_RESPONSE_DURATION = 8.88  # seconds
+
+    for mod in modalities:
+        mod_df = clean_df[clean_df['Modality'] == mod]
+
+        if mod_df.empty:
+            metrics_data[mod] = [0, 0, 0, 0, 0]
+            continue
+
+        # 1. Detection Rate (Replaces 'Not Missing Rate')
+        detection_rate = (mod_df[perc_angle_col] != 0).mean()
+
+        valid_hits = mod_df[mod_df[perc_angle_col] > 0]
+
+        if not valid_hits.empty:
+            angular_acc = (valid_hits['Angle'] == valid_hits[perc_angle_col]).mean()
+            distance_acc = (valid_hits['Distance'] == valid_hits[perc_dist_col]).mean()
+            mean_rt = valid_hits['Reaction time'].mean()
+            mean_resp = valid_hits['Response duration'].mean()
+        else:
+            angular_acc, distance_acc, mean_rt, mean_resp = 0, 0, MAX_REACTION_TIME, MAX_RESPONSE_DURATION
+
+        # Convert times to "Speed" (1.0 = instant, 0.0 = hits MAX threshold)
+        reaction_speed = np.clip(1.0 - (mean_rt / MAX_REACTION_TIME), 0, 1)
+        response_speed = np.clip(1.0 - (mean_resp / MAX_RESPONSE_DURATION), 0, 1)
+
+        metrics_data[mod] = [
+            angular_acc,
+            distance_acc,
+            detection_rate,
+            reaction_speed,
+            response_speed
+        ]
+
+    # --- Publication Plot Formatting ---
+    # Configure categories with clean line breaks
+    categories = [
+        'Angular\nAccuracy',
+        'Distance\nAccuracy',
+        'Detection\nRate',
+        'Reaction Speed\n(Norm.)',
+        'Response Speed\n(Norm.)'
+    ]
+    N = len(categories)
+    angles = [n / float(N) * 2 * pi for n in range(N)]
+    angles += angles[:1]
+
+    # Set universal font parameters for academic plotting
+    plt.rcParams.update({'font.size': 12, 'axes.linewidth': 1.2})
+    fig, ax = plt.subplots(figsize=(8, 8), subplot_kw=dict(polar=True))
+
+    # Shift the radial labels so they don't intersect the data lines
+    ax.set_theta_offset(pi / 2)
+    ax.set_theta_direction(-1)
+
+    for mod in modalities:
+        values = metrics_data[mod]
+        values += values[:1]
+
+        # Plot lines with clearly defined markers
+        ax.plot(angles, values, linewidth=2.5, linestyle='solid',
+                label=mod.capitalize(), color=color_palette[mod],
+                marker='o', markersize=8, markeredgecolor='white', markeredgewidth=1.5, zorder=3)
+
+        # Fill area
+        ax.fill(angles, values, alpha=0.15, color=color_palette[mod], zorder=2)
+
+    # Configure axes
+    plt.xticks(angles[:-1], categories, size=12, fontweight='bold', color='#333333')
+
+    # Configure concentric circles (Y-ticks)
+    ax.set_rlabel_position(22.5)  # Angle the y-tick labels slightly off-center
+    plt.yticks([0.2, 0.4, 0.6, 0.8, 1.0], ["0.2", "0.4", "0.6", "0.8", "1.0"],
+               color="#666666", size=10, zorder=1)
+    plt.ylim(0, 1.0)
+
+    # Clean up grid and spines
+    ax.grid(color='#DDDDDD', linestyle='--', linewidth=1.2, zorder=0)
+    ax.spines['polar'].set_visible(False)
+
+    # Legend formatting
+    legend = ax.legend(loc='lower center', bbox_to_anchor=(0.5, -0.15),
+                       title='Modality', frameon=False, ncol=3,
+                       fontsize=12, title_fontsize=13)
+    legend.get_title().set_fontweight('bold')
+
+    plt.tight_layout()
+
+    # Save high-res for publication if path provided (e.g., 'spider_chart.pdf')
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight', format=save_path.split('.')[-1])
+        print(f"Figure saved to {save_path}")
+
+    plt.show()
+
+    return metrics_data
+
+
+def plot_stitched_collision_timeline_with_metric(experiment_logs_all, bin_size=5, time_col='Timestamp',
+                                                 color='#DD8452', deviation_percent = 5):
+    """
+    Plots two subplots:
+    1. Overall continuous cumulative collisions up to 2160s (drops incomplete final bins).
+    2. Phase-specific collisions separated by Easy, Medium, and Hard, restricted to 0-720s.
+    Both include linear baselines, Adaptation Index, Peak metrics, and Pearson correlation.
+    """
+    overall_records = []
+    diff_records = []
+
+    # Standardize difficulty colors
+    diff_colors = {'easy': '#2ECC71', 'medium': '#F1C40F', 'hard': '#E74C3C'}
+
+    for pid, logs_df in experiment_logs_all.items():
+        if logs_df is None or logs_df.empty:
+            continue
+
+        df = logs_df.copy()
+
+        if time_col not in df.columns or "Number of collision" not in df.columns:
+            continue
+
+        df[time_col] = pd.to_numeric(df[time_col], errors='coerce')
+        df["Number of collision"] = pd.to_numeric(df["Number of collision"], errors='coerce')
+        df = df.dropna(subset=[time_col, "Number of collision"]).sort_values(by=time_col)
+
+        if df.empty:
+            continue
+
+        # =====================================================================
+        # 1. OVERALL DATA PROCESSING (Up to 2160s)
+        # =====================================================================
+        dt = df[time_col].diff().fillna(0)
+        median_dt = dt[dt <= 2].median()
+        if pd.isna(median_dt):
+            median_dt = 0
+
+        dt = dt.apply(lambda x: median_dt if x > 2 else x)
+        df['t_active'] = dt.cumsum()
+
+        df['Time_Bin'] = (df['t_active'] // bin_size) * bin_size
+        binned_avg = df.groupby('Time_Bin')['Number of collision'].mean()
+
+        if not binned_avg.empty:
+            max_t_active = df['t_active'].max()
+            max_bin = df['Time_Bin'].max()
+
+            # Check if the final bin is incomplete
+            if (max_t_active - max_bin) < bin_size:
+                max_bin -= bin_size
+
+            if max_bin >= 0:
+                all_bins = np.arange(0, max_bin + bin_size, bin_size)
+                binned_avg = binned_avg.reindex(all_bins).ffill().fillna(0)
+
+                for t_bin, avg_val in binned_avg.items():
+                    if t_bin <= 2160:
+                        overall_records.append({
+                            'Participant ID': pid,
+                            'Time (s)': t_bin,
+                            'Cumulative Collisions': avg_val
+                        })
+
+        # =====================================================================
+        # 2. DIFFICULTY LEVEL DATA PROCESSING (Restricted to 720s)
+        # =====================================================================
+        if 'Difficulty level' in df.columns:
+            df['Difficulty level'] = df['Difficulty level'].astype(str).str.strip().str.lower()
+
+            for diff in ['easy', 'medium', 'hard']:
+                diff_df = df[df['Difficulty level'] == diff].copy()
+                if diff_df.empty:
+                    continue
+
+                diff_dt = diff_df[time_col].diff().fillna(0)
+                diff_median_dt = diff_dt[diff_dt <= 2].median()
+                if pd.isna(diff_median_dt):
+                    diff_median_dt = 0
+
+                diff_dt = diff_dt.apply(lambda x: diff_median_dt if x > 2 else x)
+                diff_df['phase_time'] = diff_dt.cumsum()
+
+                base_collisions = diff_df['Number of collision'].iloc[0]
+                diff_df['phase_collisions'] = diff_df['Number of collision'] - base_collisions
+
+                diff_df['Phase_Time_Bin'] = (diff_df['phase_time'] // bin_size) * bin_size
+                diff_binned_avg = diff_df.groupby('Phase_Time_Bin')['phase_collisions'].mean()
+
+                if not diff_binned_avg.empty:
+                    diff_max_bin = diff_df['Phase_Time_Bin'].max()
+                    diff_all_bins = np.arange(0, diff_max_bin + bin_size, bin_size)
+                    diff_binned_avg = diff_binned_avg.reindex(diff_all_bins).ffill().fillna(0)
+
+                    for t_bin, avg_val in diff_binned_avg.items():
+                        if t_bin <= 720:
+                            diff_records.append({
+                                'Participant ID': pid,
+                                'Difficulty': diff,
+                                'Time (s)': t_bin,
+                                'Phase Collisions': avg_val
+                            })
+
+    df_overall = pd.DataFrame(overall_records)
+    df_diff = pd.DataFrame(diff_records)
+
+    if df_overall.empty:
+        print("No valid log data found.")
+        return None, None
+
+    # --- Figure Setup ---
+    fig, axes = plt.subplots(2, 1, figsize=(12, 13))
+
+    # =====================================================================
+    # SUBPLOT 1: OVERALL TIMELINE
+    # =====================================================================
+    ax1 = axes[0]
+    mean_curve = df_overall.groupby('Time (s)')['Cumulative Collisions'].mean().sort_index()
+    t_vals = mean_curve.index.values
+    y_vals = mean_curve.values
+
+    t_min, t_max = t_vals[0], t_vals[-1]
+    y_min, y_max = y_vals[0], y_vals[-1]
+    y_linear = np.linspace(y_min, y_max, len(t_vals))
+
+    auc_actual = np.trapz(y_vals, t_vals)
+    auc_linear = np.trapz(y_linear, t_vals)
+
+    dev_pct_overall = ((auc_actual - auc_linear) / auc_linear) * 100 if auc_linear > 0 else 0.0
+
+    if dev_pct_overall > deviation_percent:
+        conc_overall = "Learning / Adaptation"
+    elif dev_pct_overall < -deviation_percent:
+        conc_overall = "Fatigue / Degradation"
+    else:
+        conc_overall = "Steady Rate"
+
+    # Calculate Peak metrics and Pearson correlation
+    peak_val_overall = np.max(y_vals)
+    peak_time_overall = t_vals[np.argmax(y_vals)]
+    corr_overall, _ = pearsonr(t_vals, y_vals) if np.std(y_vals) > 0 else (0.0, 1.0)
+
+    sns.lineplot(data=df_overall, x='Time (s)', y='Cumulative Collisions', errorbar=('ci', 95),
+                 color=color, linewidth=2.5, label='Actual Mean Collisions', ax=ax1)
+
+    ax1.plot([t_min, t_max], [y_min, y_max], linestyle='--', color='#444444',
+             linewidth=2, label='Steady Baseline (Constant Rate)')
+
+    textstr1 = (f"Overall Adaptation Index: {dev_pct_overall:+.1f}%\n"
+                f"Conclusion: {conc_overall}\n"
+                f"Pearson r: {corr_overall:.3f}")
+
+    props = dict(boxstyle='round', facecolor='white', alpha=0.9, edgecolor='gray')
+    ax1.text(0.02, 0.95, textstr1, transform=ax1.transAxes, fontsize=11,
+             verticalalignment='top', bbox=props, fontweight='bold')
+
+    ax1.set_title(f'Overall Cumulative Collisions ({bin_size}s bins)', fontsize=14, fontweight='bold')
+    ax1.set_xlabel('Active Experiment Time (seconds)', fontsize=11, fontweight='bold')
+    ax1.set_ylabel('Total Cumulative Collisions', fontsize=11, fontweight='bold')
+    ax1.grid(alpha=0.3, linestyle='--')
+    ax1.set_xlim(0, 2160)
+    ax1.set_ylim(bottom=0)
+    ax1.legend(loc='lower right')
+
+    # =====================================================================
+    # SUBPLOT 2: PHASE-SPECIFIC TIMELINES
+    # =====================================================================
+    ax2 = axes[1]
+    if not df_diff.empty:
+        sns.lineplot(data=df_diff, x='Time (s)', y='Phase Collisions', hue='Difficulty',
+                     palette=diff_colors, errorbar=('ci', 95), linewidth=2.5, ax=ax2)
+
+        metrics_text = "Adaptation Index by Phase (0-720s):\n"
+
+        for diff in ['easy', 'medium', 'hard']:
+            diff_data = df_diff[df_diff['Difficulty'] == diff]
+            if diff_data.empty: continue
+
+            diff_mean = diff_data.groupby('Time (s)')['Phase Collisions'].mean().sort_index()
+            t_d = diff_mean.index.values
+            y_d = diff_mean.values
+
+            if len(t_d) < 2: continue
+
+            td_min, td_max = t_d[0], t_d[-1]
+            yd_min, yd_max = y_d[0], y_d[-1]
+            y_d_linear = np.linspace(yd_min, yd_max, len(t_d))
+
+            auc_d_actual = np.trapz(y_d, t_d)
+            auc_d_linear = np.trapz(y_d_linear, t_d)
+
+            dev_pct = ((auc_d_actual - auc_d_linear) / auc_d_linear) * 100 if auc_d_linear > 0 else 0.0
+
+            if dev_pct > deviation_percent:
+                conc = "Learning"
+            elif dev_pct < -deviation_percent:
+                conc = "Fatigue"
+            else:
+                conc = "Steady"
+
+            # Calculate Peak metrics and Pearson correlation for each phase
+            peak_val_diff = np.max(y_d)
+            peak_time_diff = t_d[np.argmax(y_d)]
+            corr_diff, _ = pearsonr(t_d, y_d) if np.std(y_d) > 0 else (0.0, 1.0)
+
+            metrics_text += (f"• {diff.capitalize()}: {dev_pct:+.1f}% ({conc}) | "
+                             f"r={corr_diff:.3f}\n")
+
+            ax2.plot([td_min, td_max], [yd_min, yd_max], linestyle='--', color=diff_colors[diff],
+                     linewidth=2, alpha=0.8)
+
+        ax2.text(0.02, 0.95, metrics_text.strip(), transform=ax2.transAxes, fontsize=10,
+                 verticalalignment='top', bbox=props, fontweight='bold')
+
+        ax2.set_title(f'Collisions Generated Within Phase by Difficulty', fontsize=14, fontweight='bold')
+        ax2.set_xlabel('Active Phase Time (seconds)', fontsize=11, fontweight='bold')
+        ax2.set_ylabel('Collisions During Phase', fontsize=11, fontweight='bold')
+        ax2.grid(alpha=0.3, linestyle='--')
+
+        ax2.set_xlim(0, 720)
+        ax2.set_ylim(bottom=0)
+
+        handles, labels = ax2.get_legend_handles_labels()
+        ax2.legend(handles[:3], [l.capitalize() for l in labels[:3]], title='Difficulty', loc='lower right')
+
+    plt.tight_layout(pad=3.0)
+    plt.savefig('stitched_collision_timelines_subplots.pdf', format='pdf', bbox_inches='tight')
+    plt.show()
+
+
+
+
+def analyze_individual_adaptation(experiment_logs_all, bin_size=5, time_col='Timestamp'):
+    """
+    Plots the individual cumulative collision curves for all participants.
+    Calculates the Adaptation Index for each person individually, color-codes
+    their curve (Learning, Fatigue, or Steady), and prints the summary counts.
+    """
+    participant_records = []
+    participant_metrics = []
+
+    for pid, logs_df in experiment_logs_all.items():
+        if logs_df is None or logs_df.empty:
+            continue
+
+        df = logs_df.copy()
+
+        if time_col not in df.columns or "Number of collision" not in df.columns:
+            continue
+
+        df[time_col] = pd.to_numeric(df[time_col], errors='coerce')
+        df["Number of collision"] = pd.to_numeric(df["Number of collision"], errors='coerce')
+        df = df.dropna(subset=[time_col, "Number of collision"]).sort_values(by=time_col)
+
+        if df.empty:
+            continue
+
+        # 1. Stitch time gaps
+        dt = df[time_col].diff().fillna(0)
+        median_dt = dt[dt <= 2].median()
+        if pd.isna(median_dt):
+            median_dt = 0
+
+        dt = dt.apply(lambda x: median_dt if x > 2 else x)
+        df['t_active'] = dt.cumsum()
+
+        # 2. Bin data
+        df['Time_Bin'] = (df['t_active'] // bin_size) * bin_size
+        binned_avg = df.groupby('Time_Bin')['Number of collision'].mean()
+
+        if not binned_avg.empty:
+            max_t_active = df['t_active'].max()
+            max_bin = df['Time_Bin'].max()
+
+            # Drop incomplete final bin
+            if (max_t_active - max_bin) < bin_size:
+                max_bin -= bin_size
+
+            if max_bin >= 0:
+                all_bins = np.arange(0, max_bin + bin_size, bin_size)
+                binned_avg = binned_avg.reindex(all_bins).ffill().fillna(0)
+
+                # Filter strictly to <= 2160s
+                binned_avg = binned_avg[binned_avg.index <= 2160]
+
+                if len(binned_avg) < 2:
+                    continue
+
+                # 3. Calculate Individual Metric (AUC)
+                t_vals = binned_avg.index.values
+                y_vals = binned_avg.values
+
+                y_linear = np.linspace(y_vals[0], y_vals[-1], len(t_vals))
+
+                auc_actual = np.trapz(y_vals, t_vals)
+                auc_linear = np.trapz(y_linear, t_vals)
+
+                dev_pct = ((auc_actual - auc_linear) / auc_linear) * 100 if auc_linear > 0 else 0.0
+
+                if dev_pct > 5.0:
+                    status = 'Learning'
+                    color = '#2ECC71'  # Green
+                elif dev_pct < -5.0:
+                    status = 'Fatigue'
+                    color = '#E74C3C'  # Red
+                else:
+                    status = 'Steady'
+                    color = '#BDC3C7'  # Gray
+
+                participant_metrics.append({
+                    'Participant ID': pid,
+                    'Adaptation Index (%)': dev_pct,
+                    'Status': status,
+                    'Color': color
+                })
+
+                # Store curve data for plotting
+                for t_bin, avg_val in binned_avg.items():
+                    participant_records.append({
+                        'Participant ID': pid,
+                        'Time (s)': t_bin,
+                        'Collisions': avg_val,
+                        'Color': color
+                    })
+
+    df_curves = pd.DataFrame(participant_records)
+    df_metrics = pd.DataFrame(participant_metrics)
+
+    if df_curves.empty:
+        print("No valid log data found.")
+        return None, None
+
+    # --- Print Summary Statistics ---
+    print("\n" + "=" * 55)
+    print("INDIVIDUAL PARTICIPANT ADAPTATION SUMMARY")
+    print("=" * 55)
+    status_counts = df_metrics['Status'].value_counts()
+
+    learning_count = status_counts.get('Learning', 0)
+    steady_count = status_counts.get('Steady', 0)
+    fatigue_count = status_counts.get('Fatigue', 0)
+    total_valid = len(df_metrics)
+
+    print(f"Total valid participants analyzed: {total_valid}")
+    print(f"  • Learning / Adaptation (> 5% dev) : {learning_count} participants")
+    print(f"  • Steady Rate (within ±5% dev)     : {steady_count} participants")
+    print(f"  • Fatigue / Degradation (< -5% dev): {fatigue_count} participants")
+    print("=" * 55 + "\n")
+
+    # --- Plotting ---
+    fig, ax = plt.subplots(figsize=(12, 7))
+
+    # Plot individual lines
+    for pid in df_curves['Participant ID'].unique():
+        p_data = df_curves[df_curves['Participant ID'] == pid]
+        # We only need the color from the first row of this participant
+        p_color = p_data['Color'].iloc[0]
+
+        ax.plot(p_data['Time (s)'], p_data['Collisions'], color=p_color, alpha=0.3, linewidth=1.5)
+
+    # Plot overall average as a thick black line for reference
+    mean_curve = df_curves.groupby('Time (s)')['Collisions'].mean()
+    ax.plot(mean_curve.index, mean_curve.values, color='black', linewidth=3.5, label='Overall Group Mean')
+
+    # Custom legend for the colors
+    from matplotlib.lines import Line2D
+    custom_lines = [
+        Line2D([0], [0], color='#2ECC71', lw=2, alpha=0.8),
+        Line2D([0], [0], color='#BDC3C7', lw=2, alpha=0.8),
+        Line2D([0], [0], color='#E74C3C', lw=2, alpha=0.8),
+        Line2D([0], [0], color='black', lw=3.5)
+    ]
+    ax.legend(custom_lines,
+              [f'Learning (N={learning_count})', f'Steady (N={steady_count})', f'Fatigue (N={fatigue_count})',
+               'Overall Mean'],
+              loc='upper left', fontsize=11, framealpha=0.9)
+
+    ax.set_title('Individual Cumulative Collisions by Adaptation Profile', fontsize=15, fontweight='bold', pad=15)
+    ax.set_xlabel('Active Experiment Time (seconds)', fontsize=12, fontweight='bold')
+    ax.set_ylabel('Cumulative Collisions', fontsize=12, fontweight='bold')
+
+    ax.grid(alpha=0.3, linestyle='--')
+    ax.set_xlim(0, 2160)
+    ax.set_ylim(bottom=0)
+
+    plt.tight_layout()
+    plt.savefig('individual_adaptation_curves.pdf', format='pdf', bbox_inches='tight')
+    plt.show()
+
+
+def analyze_sequence_vs_adaptation(experiment_logs_all, bin_size=5, time_col='Timestamp'):
+    """
+    Extracts the chronological difficulty sequence for each participant.
+    Calculates their Adaptation Index (Learning, Steady, Fatigue).
+    Cross-tabulates and prints the number of participants for each sequence within each group.
+    """
+    participant_metrics = []
+
+    for pid, logs_df in experiment_logs_all.items():
+        if logs_df is None or logs_df.empty:
+            continue
+
+        df = logs_df.copy()
+
+        required_cols = [time_col, "Number of collision", "Difficulty level"]
+        if not all(col in df.columns for col in required_cols):
+            continue
+
+        df[time_col] = pd.to_numeric(df[time_col], errors='coerce')
+        df["Number of collision"] = pd.to_numeric(df["Number of collision"], errors='coerce')
+        df = df.dropna(subset=[time_col, "Number of collision"]).sort_values(by=time_col)
+
+        if df.empty:
+            continue
+
+        # 1. Extract chronological sequence of difficulty
+        df['Difficulty level'] = df['Difficulty level'].astype(str).str.strip().str.lower()
+
+        # Keep only the rows where the difficulty level changes
+        sequence_list = df['Difficulty level'][df['Difficulty level'].shift() != df['Difficulty level']].tolist()
+        # Filter to ensure we only capture valid phases
+        valid_phases = [s.capitalize() for s in sequence_list if s in ['easy', 'medium', 'hard']]
+        sequence_str = " -> ".join(valid_phases)
+
+        # 2. Stitch time gaps and calculate Active Time
+        dt = df[time_col].diff().fillna(0)
+        median_dt = dt[dt <= 2].median()
+        if pd.isna(median_dt):
+            median_dt = 0
+
+        dt = dt.apply(lambda x: median_dt if x > 2 else x)
+        df['t_active'] = dt.cumsum()
+
+        # 3. Bin data and calculate Adaptation Status
+        df['Time_Bin'] = (df['t_active'] // bin_size) * bin_size
+        binned_avg = df.groupby('Time_Bin')['Number of collision'].mean()
+
+        if not binned_avg.empty:
+            max_t_active = df['t_active'].max()
+            max_bin = df['Time_Bin'].max()
+
+            # Drop incomplete final bin
+            if (max_t_active - max_bin) < bin_size:
+                max_bin -= bin_size
+
+            if max_bin >= 0:
+                all_bins = np.arange(0, max_bin + bin_size, bin_size)
+                binned_avg = binned_avg.reindex(all_bins).ffill().fillna(0)
+
+                # Filter strictly to <= 2160s
+                binned_avg = binned_avg[binned_avg.index <= 2160]
+
+                if len(binned_avg) < 2:
+                    continue
+
+                t_vals = binned_avg.index.values
+                y_vals = binned_avg.values
+
+                y_linear = np.linspace(y_vals[0], y_vals[-1], len(t_vals))
+
+                auc_actual = np.trapz(y_vals, t_vals)
+                auc_linear = np.trapz(y_linear, t_vals)
+
+                dev_pct = ((auc_actual - auc_linear) / auc_linear) * 100 if auc_linear > 0 else 0.0
+
+                if dev_pct > 5.0:
+                    status = 'Learning'
+                elif dev_pct < -5.0:
+                    status = 'Fatigue'
+                else:
+                    status = 'Steady'
+
+                participant_metrics.append({
+                    'Participant ID': pid,
+                    'Sequence': sequence_str,
+                    'Status': status
+                })
+
+    df_metrics = pd.DataFrame(participant_metrics)
+
+    if df_metrics.empty:
+        print("No valid data found to map sequences.")
+        return None
+
+    # --- Generate Summary Table ---
+    # Create a cross-tabulation of Status vs. Sequence
+    cross_tab = pd.crosstab(df_metrics['Status'], df_metrics['Sequence'])
+
+    # Ensure all three statuses exist in the index even if they have 0 count
+    for stat in ['Learning', 'Steady', 'Fatigue']:
+        if stat not in cross_tab.index:
+            cross_tab.loc[stat] = 0
+
+    # Define the 6 expected sequences to ensure columns are ordered uniformly
+    expected_sequences = [
+        'Easy -> Medium -> Hard',
+        'Easy -> Hard -> Medium',
+        'Medium -> Easy -> Hard',
+        'Medium -> Hard -> Easy',
+        'Hard -> Easy -> Medium',
+        'Hard -> Medium -> Easy'
+    ]
+
+    # Add any missing sequence columns with 0
+    for seq in expected_sequences:
+        if seq not in cross_tab.columns:
+            cross_tab[seq] = 0
+
+    # Reorder columns and rows for clean output
+    cross_tab = cross_tab[expected_sequences].loc[['Learning', 'Steady', 'Fatigue']]
+
+    print("\n" + "=" * 80)
+    print("DISTRIBUTION OF DIFFICULTY SEQUENCES BY ADAPTATION GROUP")
+    print("=" * 80)
+
+    for status in ['Learning', 'Steady', 'Fatigue']:
+        print(f"\n[{status.upper()}] Group (Total: {cross_tab.loc[status].sum()})")
+        print("-" * 40)
+        for seq in expected_sequences:
+            count = cross_tab.loc[status, seq]
+            print(f"  • {seq:<25} : {count}")
+
+    print("\n" + "=" * 80 + "\n")
+
+
+def plot_adaptation_index_by_difficulty(experiment_logs_all, bin_size=5, time_col='Timestamp', deviation_percent = 5):
+    """
+    Calculates the Adaptation Index (Deviation %) for each participant within
+    each difficulty phase independently, then plots the distribution across all
+    participants using box plots.
+    Also reports the number of participants > 5% and < -5% on the plot.
+    """
+    records = []
+
+    # Standardize difficulty colors
+    diff_colors = {'easy': '#2ECC71', 'medium': '#F1C40F', 'hard': '#E74C3C'}
+    difficulty_order = ['easy', 'medium', 'hard']
+
+    for pid, logs_df in experiment_logs_all.items():
+        if logs_df is None or logs_df.empty:
+            continue
+
+        df = logs_df.copy()
+
+        if time_col not in df.columns or "Number of collision" not in df.columns or "Difficulty level" not in df.columns:
+            continue
+
+        df[time_col] = pd.to_numeric(df[time_col], errors='coerce')
+        df["Number of collision"] = pd.to_numeric(df["Number of collision"], errors='coerce')
+        df['Difficulty level'] = df['Difficulty level'].astype(str).str.strip().str.lower()
+
+        df = df.dropna(subset=[time_col, "Number of collision"]).sort_values(by=time_col)
+
+        if df.empty:
+            continue
+
+        # Process each difficulty phase separately
+        for diff in difficulty_order:
+            diff_df = df[df['Difficulty level'] == diff].copy()
+            if diff_df.empty:
+                continue
+
+            # 1. Reset clock (Stitching gaps just in case there are pauses within the phase)
+            diff_dt = diff_df[time_col].diff().fillna(0)
+            diff_median_dt = diff_dt[diff_dt <= 2].median()
+            if pd.isna(diff_median_dt):
+                diff_median_dt = 0
+
+            diff_dt = diff_dt.apply(lambda x: diff_median_dt if x > 2 else x)
+            diff_df['phase_time'] = diff_dt.cumsum()
+
+            # 2. Reset collisions so the phase always starts at 0
+            base_collisions = diff_df['Number of collision'].iloc[0]
+            diff_df['phase_collisions'] = diff_df['Number of collision'] - base_collisions
+
+            # 3. Bin the data
+            diff_df['Phase_Time_Bin'] = (diff_df['phase_time'] // bin_size) * bin_size
+            diff_binned_avg = diff_df.groupby('Phase_Time_Bin')['phase_collisions'].mean()
+
+            if not diff_binned_avg.empty:
+                diff_max_bin = diff_df['Phase_Time_Bin'].max()
+                diff_all_bins = np.arange(0, diff_max_bin + bin_size, bin_size)
+                diff_binned_avg = diff_binned_avg.reindex(diff_all_bins).ffill().fillna(0)
+
+                # We need at least 2 points to calculate AUC
+                if len(diff_binned_avg) < 2:
+                    continue
+
+                # 4. Calculate AUC and Deviation Percentage
+                t_vals = diff_binned_avg.index.values
+                y_vals = diff_binned_avg.values
+
+                # If they never collided in this phase, deviation is strictly 0%
+                if y_vals[-1] == 0:
+                    dev_pct = 0.0
+                else:
+                    y_linear = np.linspace(y_vals[0], y_vals[-1], len(t_vals))
+
+                    auc_actual = np.trapz(y_vals, t_vals)
+                    auc_linear = np.trapz(y_linear, t_vals)
+
+                    dev_pct = ((auc_actual - auc_linear) / auc_linear) * 100 if auc_linear > 0 else 0.0
+
+                records.append({
+                    'Participant ID': pid,
+                    'Difficulty': diff.capitalize(),
+                    'Adaptation Index (%)': dev_pct
+                })
+
+    df_plot = pd.DataFrame(records)
+
+    if df_plot.empty:
+        print("No valid log data found.")
+        return None
+
+    # --- Plotting ---
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    # Capitalize the order for plotting matching
+    plot_order = [d.capitalize() for d in difficulty_order]
+    plot_colors = {k.capitalize(): v for k, v in diff_colors.items()}
+
+    # Draw a reference line at 0% (Steady rate / perfectly linear)
+    ax.axhline(0, color='#444444', linestyle='--', linewidth=1.5, zorder=1)
+
+    # Box plot for distribution
+    sns.boxplot(
+        data=df_plot,
+        x='Difficulty',
+        y='Adaptation Index (%)',
+        order=plot_order,
+        palette=plot_colors,
+        ax=ax,
+        showfliers=False,
+        width=0.5,
+        zorder=2
+    )
+
+    # Overlay individual participant data points to see the exact spread
+    sns.stripplot(
+        data=df_plot,
+        x='Difficulty',
+        y='Adaptation Index (%)',
+        order=plot_order,
+        color='black',
+        alpha=0.4,
+        jitter=True,
+        size=5,
+        ax=ax,
+        zorder=3
+    )
+
+    # --- Calculate Counts for Summary Box ---
+    stats_text = "Participant Counts per Zone:\n"
+    for diff in plot_order:
+        diff_data = df_plot[df_plot['Difficulty'] == diff]
+
+        n_learning = len(diff_data[diff_data['Adaptation Index (%)'] > deviation_percent])
+        n_fatigue = len(diff_data[diff_data['Adaptation Index (%)'] < -deviation_percent])
+        n_steady = len(
+            diff_data[(diff_data['Adaptation Index (%)'] >= -5.0) & (diff_data['Adaptation Index (%)'] <= 5.0)])
+
+        stats_text += f"• {diff}: {n_learning} Learn | {n_steady} Steady | {n_fatigue} Fatigue\n"
+
+    # Add the stats text box to the top-left of the plot
+    props = dict(boxstyle='round', facecolor='white', alpha=0.9, edgecolor='gray')
+    ax.text(0.02, 0.96, stats_text.strip(), transform=ax.transAxes, fontsize=10,
+            verticalalignment='top', bbox=props, fontweight='bold', zorder=10)
+
+    # Annotate plot regions for easy interpretation on the right side
+    x_lims = ax.get_xlim()
+    ax.text(x_lims[1], 5, 'Learning Zone (+%)', color='#2ECC71', fontweight='bold',
+            ha='right', va='bottom', alpha=0.8, fontsize=10)
+    ax.text(x_lims[1], -5, 'Fatigue Zone (-%)', color='#E74C3C', fontweight='bold',
+            ha='right', va='top', alpha=0.8, fontsize=10)
+
+    ax.set_title('Adaptation Index (Deviation from Linear) by Task Difficulty', fontsize=15, fontweight='bold', pad=15)
+    ax.set_xlabel('Phase Difficulty', fontsize=12, fontweight='bold')
+    ax.set_ylabel('Adaptation Index (Deviation %)', fontsize=12, fontweight='bold')
+
+    ax.grid(alpha=0.2, linestyle='--')
+
+    plt.tight_layout()
+    plt.savefig('adaptation_index_by_difficulty_boxplot.pdf', format='pdf', bbox_inches='tight')
+    plt.show()
+
+
+
+
+
+def correlate_fatigue_and_adaptation(experiment_logs_all, df_questionnaire_mid, bin_size=5, time_col='Timestamp'):
+    """
+    Determines the chronological phase order for each participant to match
+    the correct questionnaire column (Q1.1, Q1.2, Q1.3) to the correct difficulty.
+    Calculates the Adaptation Index and correlates it with reported fatigue.
+    """
+    records = []
+
+    # 1. Extract Adaptation Index and Map Phases
+    for pid, logs_df in experiment_logs_all.items():
+        if logs_df is None or logs_df.empty:
+            continue
+
+        df = logs_df.copy()
+
+        req_cols = [time_col, "Number of collision", "Difficulty level"]
+        if not all(col in df.columns for col in req_cols):
+            continue
+
+        df[time_col] = pd.to_numeric(df[time_col], errors='coerce')
+        df["Number of collision"] = pd.to_numeric(df["Number of collision"], errors='coerce')
+        df['Difficulty level'] = df['Difficulty level'].astype(str).str.strip().str.lower()
+
+        df = df.dropna(subset=[time_col, "Number of collision"]).sort_values(by=time_col)
+        if df.empty:
+            continue
+
+        # Find the start time of each difficulty to determine chronological phase order (1, 2, 3)
+        phase_starts = df.groupby('Difficulty level')[time_col].min().sort_values()
+
+        diff_to_phase = {}
+        # Enumerate gives 0, 1, 2 -> we add 1 to get Phase 1, 2, 3
+        for i, diff in enumerate(phase_starts.index):
+            if diff in ['easy', 'medium', 'hard']:
+                diff_to_phase[diff] = i + 1
+
+        for diff in ['easy', 'medium', 'hard']:
+            diff_df = df[df['Difficulty level'] == diff].copy()
+            if diff_df.empty or diff not in diff_to_phase:
+                continue
+
+            phase_num = diff_to_phase[diff]
+
+            # Reset clock for the phase
+            diff_dt = diff_df[time_col].diff().fillna(0)
+            diff_median_dt = diff_dt[diff_dt <= 2].median()
+            if pd.isna(diff_median_dt): diff_median_dt = 0
+
+            diff_dt = diff_dt.apply(lambda x: diff_median_dt if x > 2 else x)
+            diff_df['phase_time'] = diff_dt.cumsum()
+
+            # Reset collisions
+            base_collisions = diff_df['Number of collision'].iloc[0]
+            diff_df['phase_collisions'] = diff_df['Number of collision'] - base_collisions
+
+            # Bin the data
+            diff_df['Phase_Time_Bin'] = (diff_df['phase_time'] // bin_size) * bin_size
+            diff_binned_avg = diff_df.groupby('Phase_Time_Bin')['phase_collisions'].mean()
+
+            if not diff_binned_avg.empty:
+                diff_max_bin = diff_df['Phase_Time_Bin'].max()
+                diff_all_bins = np.arange(0, diff_max_bin + bin_size, bin_size)
+                diff_binned_avg = diff_binned_avg.reindex(diff_all_bins).ffill().fillna(0)
+
+                if len(diff_binned_avg) < 2:
+                    continue
+
+                # Calculate AUC Deviation %
+                t_vals = diff_binned_avg.index.values
+                y_vals = diff_binned_avg.values
+
+                if y_vals[-1] == 0:
+                    dev_pct = 0.0
+                else:
+                    y_linear = np.linspace(y_vals[0], y_vals[-1], len(t_vals))
+                    auc_actual = np.trapz(y_vals, t_vals)
+                    auc_linear = np.trapz(y_linear, t_vals)
+                    dev_pct = ((auc_actual - auc_linear) / auc_linear) * 100 if auc_linear > 0 else 0.0
+
+                # Q1.1 is Phase 1, Q1.2 is Phase 2, Q1.3 is Phase 3
+                q_col = f"Q1.{phase_num}"
+
+                records.append({
+                    'Participant ID': int(pid),
+                    'Difficulty': diff,
+                    'Questionnaire_Column': q_col,
+                    'Adaptation Index (%)': dev_pct
+                })
+
+    df_metrics = pd.DataFrame(records)
+
+    if df_metrics.empty:
+        print("No valid adaptation data found to correlate.")
+        return None, None
+
+    # 2. Match with Questionnaire Data
+    # Ensure Participant ID columns match types perfectly for lookup
+    df_questionnaire_mid['Participant ID'] = pd.to_numeric(df_questionnaire_mid['Participant ID'], errors='coerce')
+
+    merged_records = []
+    for _, row in df_metrics.iterrows():
+        pid = row['Participant ID']
+        q_col = row['Questionnaire_Column']
+        diff = row['Difficulty']
+        dev_pct = row['Adaptation Index (%)']
+
+        # Look up this participant in the questionnaire dataframe
+        q_row = df_questionnaire_mid[df_questionnaire_mid['Participant ID'] == pid]
+
+        if not q_row.empty and q_col in q_row.columns:
+            fatigue_score = q_row[q_col].values[0]
+            if pd.notna(fatigue_score):
+                merged_records.append({
+                    'Participant ID': pid,
+                    'Difficulty': diff,
+                    'Reported Fatigue': float(fatigue_score),
+                    'Adaptation Index (%)': dev_pct
+                })
+
+    df_merged = pd.DataFrame(merged_records)
+
+    # 3. Calculate and Print Correlations
+    print("\n" + "=" * 65)
+    print("SPEARMAN CORRELATION: REPORTED FATIGUE vs ADAPTATION INDEX")
+    print("=" * 65)
+
+    results = {}
+    for diff in ['easy', 'medium', 'hard']:
+        diff_data = df_merged[df_merged['Difficulty'] == diff]
+
+        if len(diff_data) > 2:
+            # Spearman is used because Questionnaire data (1-5) is Ordinal
+            correlation, p_value = spearmanr(diff_data['Reported Fatigue'], diff_data['Adaptation Index (%)'])
+            results[diff] = {'correlation': correlation, 'p_value': p_value, 'n': len(diff_data)}
+
+            print(f"[{diff.upper()} DIFFICULTY]")
+            print(f"  • Spearman Correlation (rho): {correlation:+.3f}")
+            print(f"  • P-value:                    {p_value:.4f}")
+            print(f"  • Valid Participants (N):     {len(diff_data)}")
+            print("-" * 65)
+        else:
+            print(f"[{diff.upper()} DIFFICULTY] Not enough matching data to compute correlation.")
+            print("-" * 65)
+
+
+def plot_performance_and_polar_accuracy(perception_results_all, experiment_logs_all, color_palette, axes=None):
+    """
+    Plots Miss Rate, Angular Accuracy, Distance Accuracy, and Polar Accuracy
+    by modality in a 2x2 subplot arrangement.
+    """
+
+    mod_metrics = []
+    all_trials = []
+
+    for subject, df in perception_results_all.items():
+        if df is None or df.empty:
+            continue
+
+        df_copy = df.copy()
+        df_copy["Participant ID"] = subject
+
+        perc_angle_col = "Angle perceived" if "Angle perceived" in df_copy.columns else "Perceived angle"
+        perc_dist_col = "Distance perceived" if "Distance perceived" in df_copy.columns else "Perceived distance"
+        dist_col = "Distance" if "Distance" in df_copy.columns else "Distnce"
+
+        df_copy[perc_angle_col] = pd.to_numeric(df_copy[perc_angle_col], errors="coerce")
+        df_copy[perc_dist_col] = pd.to_numeric(df_copy[perc_dist_col], errors="coerce")
+        df_copy["Angle"] = pd.to_numeric(df_copy["Angle"], errors="coerce")
+        df_copy[dist_col] = pd.to_numeric(df_copy[dist_col], errors="coerce")
+        df_copy["Modality"] = df_copy["Modality"].astype(str).str.strip().str.capitalize()
+
+        invalidated_mask = df_copy[perc_angle_col].eq(-1) | df_copy[perc_dist_col].eq(-1)
+        df_copy = df_copy.loc[~invalidated_mask].copy()
+        all_trials.append(df_copy)
+
+        for modality in ["Visual", "Auditory", "Haptic"]:
+            mod_df = df_copy.loc[df_copy["Modality"] == modality].copy()
+
+            if mod_df.empty:
+                continue
+
+            missed_mask = mod_df[perc_angle_col].eq(0) | mod_df[perc_dist_col].eq(0)
+            valid_mask = mod_df[perc_angle_col].gt(0) & mod_df[perc_dist_col].gt(0)
+            analyzable_mask = missed_mask | valid_mask
+
+            miss_rate = missed_mask.sum() / analyzable_mask.sum() if analyzable_mask.sum() > 0 else np.nan
+            valid_trials = mod_df.loc[valid_mask]
+
+            if not valid_trials.empty:
+                ang_acc = valid_trials["Angle"].eq(valid_trials[perc_angle_col]).mean()
+                dist_acc = valid_trials[dist_col].eq(valid_trials[perc_dist_col]).mean()
+            else:
+                ang_acc, dist_acc = np.nan, np.nan
+
+            mod_metrics.append({
+                "Subject": subject,
+                "Modality": modality,
+                "Miss Rate": miss_rate,
+                "Angular Accuracy": ang_acc,
+                "Distance Accuracy": dist_acc
+            })
+
+    if not mod_metrics or not all_trials:
+        raise ValueError("No valid perception data was found.")
+
+    df_mod = pd.DataFrame(mod_metrics)
+    df_all = pd.concat(all_trials, ignore_index=True)
+
+    perc_angle_col = "Angle perceived" if "Angle perceived" in df_all.columns else "Perceived angle"
+    perc_dist_col = "Distance perceived" if "Distance perceived" in df_all.columns else "Perceived distance"
+    dist_col = "Distance" if "Distance" in df_all.columns else "Distnce"
+
+    valid_polar_df = df_all.loc[
+        df_all[perc_angle_col].gt(0)
+        & df_all[perc_dist_col].gt(0)
+        & df_all["Angle"].notna()
+        & df_all[dist_col].notna()
+    ].copy()
+
+    if valid_polar_df.empty:
+        raise ValueError("No valid trials were available for polar accuracy.")
+
+    theta_true = valid_polar_df["Angle"] * (np.pi / 4)
+    theta_perceived = valid_polar_df[perc_angle_col] * (np.pi / 4)
+    r_true = valid_polar_df[dist_col]
+    r_perceived = valid_polar_df[perc_dist_col]
+
+    squared_error = (
+        r_true ** 2
+        + r_perceived ** 2
+        - 2 * r_true * r_perceived * np.cos(theta_true - theta_perceived)
+    )
+
+    valid_polar_df["Geometric Error"] = np.sqrt(np.maximum(squared_error, 0))
+
+    r_max = max(r_true.max(), r_perceived.max())
+
+    if pd.isna(r_max) or r_max <= 0:
+        raise ValueError("The maximum distance must be greater than zero.")
+
+    valid_polar_df["Polar Accuracy"] = 100 * (1 - valid_polar_df["Geometric Error"] / (2 * r_max))
+    valid_polar_df["Polar Accuracy"] = valid_polar_df["Polar Accuracy"].clip(lower=0, upper=100)
+
+    polar_subject_means = (
+        valid_polar_df.groupby(["Participant ID", "Modality"], as_index=False)["Polar Accuracy"].mean()
+    )
+
+    modality_order = ["Visual", "Auditory", "Haptic"]
+    modality_pairs = [("Visual", "Auditory"), ("Auditory", "Haptic"), ("Visual", "Haptic")]
+    palette_mod = {modality: color_palette[modality.lower()] for modality in modality_order}
+
+    def calculate_wilcoxon(data, subject_col, condition_col, metric, pairs, bonferroni=False):
+        pivot_df = data.pivot(index=subject_col, columns=condition_col, values=metric)
+        results = {}
+
+        for condition1, condition2 in pairs:
+            if condition1 not in pivot_df.columns or condition2 not in pivot_df.columns:
+                results[(condition1, condition2)] = np.nan
+                continue
+
+            paired_data = pivot_df[[condition1, condition2]].dropna()
+
+            if len(paired_data) <= 1:
+                results[(condition1, condition2)] = np.nan
+                continue
+
+            differences = paired_data[condition1] - paired_data[condition2]
+
+            if differences.eq(0).all():
+                p_value = 1.0
+            else:
+                p_value = wilcoxon(paired_data[condition1], paired_data[condition2], alternative="two-sided")
+
+            results[(condition1, condition2)] = min(p_value * len(pairs), 1.0) if bonferroni else p_value
+
+        return results
+
+    def annotate_wilcoxon(ax, data, subject_col, condition_col, metric, pairs, order, bonferroni=False):
+        p_values = calculate_wilcoxon(
+            data=data,
+            subject_col=subject_col,
+            condition_col=condition_col,
+            metric=metric,
+            pairs=pairs,
+            bonferroni=bonferroni
+        )
+
+        values = data[metric].dropna()
+
+        if values.empty:
+            return
+
+        y_min = values.min()
+        y_max = values.max()
+        y_range = y_max - y_min
+
+        if pd.isna(y_range) or y_range == 0:
+            y_range = 0.1 if y_max <= 1 else 10
+
+        lower_limit = min(ax.get_ylim()[0], y_min - y_range * 0.05)
+        upper_limit = y_max + y_range * 0.42
+        ax.set_ylim(lower_limit, upper_limit)
+
+        for index, (condition1, condition2) in enumerate(pairs):
+            p_value = p_values[(condition1, condition2)]
+            p_text = "N/A" if pd.isna(p_value) else ("p<0.001" if p_value < 0.001 else f"p={p_value:.3f}")
+
+            x1 = order.index(condition1)
+            x2 = order.index(condition2)
+            y = y_max + y_range * (0.05 + index * 0.11)
+            h = y_range * 0.025
+
+            ax.plot([x1, x1, x2, x2], [y, y + h, y + h, y], lw=1.2, color="black")
+            ax.text(
+                (x1 + x2) / 2,
+                y + h,
+                p_text,
+                ha="center",
+                va="bottom",
+                fontsize=9,
+                fontweight="bold" if pd.notna(p_value) and p_value < 0.05 else "normal"
+            )
+
+    sns.set_theme(style="whitegrid", context="paper", font_scale=1.15)
+    standalone = axes is None
+
+    if standalone:
+        fig, axes = plt.subplots(1, 4, figsize=(16, 4))
+
+    axes = np.asarray(axes).flatten()
+
+    if len(axes) != 4:
+        raise ValueError("Exactly four axes are required for the 2x2 plot.")
+
+    performance_metrics = ["Miss Rate", "Angular Accuracy", "Distance Accuracy"]
+
+    for index, metric in enumerate(performance_metrics):
+        sns.boxplot(
+            data=df_mod,
+            x="Modality",
+            y=metric,
+            order=modality_order,
+            palette=palette_mod,
+            ax=axes[index],
+            showmeans=True,
+            meanprops={
+                "marker": "o",
+                "markerfacecolor": "white",
+                "markeredgecolor": "black"
+            }
+        )
+
+        sns.stripplot(
+            data=df_mod,
+            x="Modality",
+            y=metric,
+            order=modality_order,
+            palette=palette_mod,
+            ax=axes[index],
+            alpha=0.6,
+            jitter=True,
+            edgecolor="gray",
+            linewidth=0.5
+        )
+
+        # axes[index].set_title(f"{metric} by Modality", fontweight="bold", fontsize=13)
+        axes[index].set_xlabel("")
+        axes[index].set_ylabel(metric, fontweight="bold")
+
+        annotate_wilcoxon(
+            ax=axes[index],
+            data=df_mod,
+            subject_col="Subject",
+            condition_col="Modality",
+            metric=metric,
+            pairs=modality_pairs,
+            order=modality_order
+        )
+
+    sns.boxplot(
+        data=polar_subject_means,
+        x="Modality",
+        y="Polar Accuracy",
+        order=modality_order,
+        palette=palette_mod,
+        ax=axes[3],
+        showfliers=False,
+        width=0.5,
+        showmeans=True,
+        meanprops={
+            "marker": "o",
+            "markerfacecolor": "white",
+            "markeredgecolor": "black"
+        }
+    )
+
+    sns.stripplot(
+        data=polar_subject_means,
+        x="Modality",
+        y="Polar Accuracy",
+        order=modality_order,
+        palette=palette_mod,
+        ax=axes[3],
+        alpha=0.6,
+        jitter=True,
+        edgecolor="gray",
+        linewidth=0.5
+    )
+
+    # axes[3].set_title("Polar Accuracy by Modality", fontweight="bold", fontsize=13)
+    axes[3].set_xlabel("")
+    axes[3].set_ylabel("Mean Polar Accuracy (%)", fontweight="bold")
+
+    annotate_wilcoxon(
+        ax=axes[3],
+        data=polar_subject_means,
+        subject_col="Participant ID",
+        condition_col="Modality",
+        metric="Polar Accuracy",
+        pairs=modality_pairs,
+        order=modality_order,
+        bonferroni=True
+    )
+
+    if standalone:
+        plt.tight_layout()
+        plt.show()
+    fig.savefig('across_modality.pdf', format='pdf', bbox_inches='tight')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

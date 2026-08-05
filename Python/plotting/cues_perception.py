@@ -30,7 +30,7 @@ def get_subjects_data_trials_df(subjects_data_path):
 
 
 
-def plot_all_perceptions(subjects_data_trials, mod1='auditory', mod2='haptic', mod3='visual'):
+def plot_all_perceptions(subjects_data_trials, color_palette, mod1='auditory', mod2='haptic', mod3='visual'):
     modalities = [mod1, mod2, mod3]
 
     def degree_to_angle(d):
@@ -49,8 +49,7 @@ def plot_all_perceptions(subjects_data_trials, mod1='auditory', mod2='haptic', m
     def level_to_radius(l):
         return l * 1.4
 
-    palette = sns.color_palette('Set2')
-    color_map = {'auditory': palette[0], 'haptic': palette[1], 'visual': palette[2]}
+    color_map = color_palette
     base_scatter_size = 18
 
     all_subject_dfs = [df for df in subjects_data_trials.values() if df is not None and not df.empty]
@@ -161,6 +160,7 @@ def plot_all_perceptions(subjects_data_trials, mod1='auditory', mod2='haptic', m
     plt.show()
 
 if __name__ == "__main__":
+    color_palette = {'visual': '#99DDFF', 'auditory': '#BBCC33', 'haptic': '#EE8866'}
     subjects_data_path_full = '../Dataset/Dataset/Recordings'
     subjects_data_trials = get_subjects_data_trials_df(subjects_data_path_full)
-    plot_all_perceptions(subjects_data_trials, 'auditory', 'haptic', 'visual')
+    plot_all_perceptions(subjects_data_trials, color_palette, 'auditory', 'haptic', 'visual')

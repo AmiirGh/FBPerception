@@ -1,25 +1,18 @@
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-import matplotlib.ticker as mtick
-import os
-import scipy.stats as stats
-import warnings
-warnings.filterwarnings("ignore")
-import time
-import matplotlib.lines as mlines
+import os, time, warnings
+import pandas as pd, numpy as np, seaborn as sns
+import matplotlib.pyplot as plt, matplotlib.ticker as mtick, matplotlib.lines as mlines, matplotlib.patches as mpatches
+import scipy.stats as stats, scipy.cluster.hierarchy as sch
+
+from math import pi
+from itertools import combinations
 from matplotlib.lines import Line2D
 from scipy.interpolate import make_interp_spline
-from scipy.stats import spearmanr
+from scipy.stats import gamma, skewnorm, spearmanr, pearsonr, ttest_ind, friedmanchisquare, wilcoxon, mannwhitneyu, ranksums
+from scipy.stats import ranksums, shapiro, ttest_ind, levene
 from sklearn.preprocessing import StandardScaler
-import scipy.cluster.hierarchy as sch
-from scipy.stats import pearsonr
-from scipy.stats import friedmanchisquare, wilcoxon
-from scipy.stats import mannwhitneyu
-from itertools import combinations
 from sklearn.cluster import AgglomerativeClustering
 
+warnings.filterwarnings("ignore")
 def get_full_df_list():
     main_dir = './data'
     folders = os.listdir(main_dir)
@@ -146,7 +139,7 @@ def extract_collision_modality(df, trials_df, start_offset=24, end_offset=48):
         # 1. Identify which trial this is in the continuous data
         current_trial_num = df.loc[idx, "Trial number"]
 
-        # 2. Look up this exact trial in the subjects_data_trials dataframe
+        # 2. Look up this exact trial in the perception_results_all dataframe
         matching_trial = trials_df[trials_df["Trial number"] == current_trial_num]
 
         # 3. Check if the trial was missed
@@ -204,11 +197,11 @@ def get_all_miss_counts(subjects_data_trials):
     return all_counts_df
 
 
-def plot_all_miss_counts(all_miss_counts):
+def plot_all_miss_counts(all_miss_counts, color_palette):
     fig, ax = plt.subplots(figsize=(8, 6))
 
     # Boxplot
-    sns.boxplot(data=all_miss_counts, x='Modality', y='count', palette="Set2", ax=ax)
+    sns.boxplot(data=all_miss_counts, x='Modality', y='count', palette=color_palette, ax=ax)
 
     # Stripplot to show individual subject data points
     # sns.stripplot(data=all_miss_counts, x="Modality", y="count", color="black", alpha=0.5, ax=ax)
@@ -391,7 +384,7 @@ def get_p_val_accuracy_by_gr(df_deg, df_lvl, df_full, gr):
     return 20
 
 
-def plot_all_miss_counts_by_generation_rate(miss_rates_by_gr, all_miss_counts_df):
+def plot_all_miss_counts_by_generation_rate(miss_rates_by_gr, all_miss_counts_df, color_palette):
     if not miss_rates_by_gr or all_miss_counts_df.empty:
         print("No data available to plot.")
         return
@@ -410,7 +403,7 @@ def plot_all_miss_counts_by_generation_rate(miss_rates_by_gr, all_miss_counts_df
             x='Modality',
             y='count',
             order=modality_order,
-            palette="Set2",
+            palette=color_palette,
             ax=ax,
             showfliers=False
         )
@@ -514,7 +507,7 @@ def get_accuracy_rates(subjects_data_trials):
     return accuracy_degree_all, accuracy_level_all, accuracy_full_all
 
 
-def plot_all_accuracy_rates(datasets):
+def plot_all_accuracy_rates(datasets, color_palette):
     # Safety check
     if not datasets:
         print("No datasets available to plot.")
@@ -540,7 +533,7 @@ def plot_all_accuracy_rates(datasets):
             x="Modality",
             y=y_col,
             order=modality_order,
-            palette="Set2",
+            palette=color_palette,
             ax=ax,
             showfliers=False
         )
@@ -631,7 +624,7 @@ def get_accuracy_rates_by_generation_rate(subjects_data_trials):
     return accuracy_degree_all, accuracy_level_all, accuracy_full_all
 
 
-def plot_accuracy_rates_by_generation_rate(datasets):
+def plot_accuracy_rates_by_generation_rate(datasets, color_palette):
     # Safety check: prevent crashing if nothing was passed
     if not datasets or datasets[0][0] is None or datasets[0][0].empty:
         print("No datasets available to plot.")
@@ -670,7 +663,7 @@ def plot_accuracy_rates_by_generation_rate(datasets):
                 x="Modality",
                 y=y_col,
                 order=modality_order,
-                palette="Set2",
+                palette=color_palette,
                 ax=ax,
             )
 
@@ -888,15 +881,15 @@ def plot_collisions_by_difficulty(subjects_data_full):
     plt.show()
 
 
-def calc_no_collisions_by_fbmod_for_time_window(subjects_data_full, subjects_data_trials, start_sec, end_sec):
+def calc_no_collisions_by_fbmod_for_time_window(experiment_logs_all, perception_results_all, start_sec, end_sec):
     all_results = []
 
-    for subject_name, df in subjects_data_full.items():
+    for subject_name, df in experiment_logs_all.items():
         # Safety check: Ensure we have the trial data for this subject
-        if subject_name not in subjects_data_trials or subjects_data_trials[subject_name] is None:
+        if subject_name not in perception_results_all or perception_results_all[subject_name] is None:
             continue
 
-        trials_df = subjects_data_trials[subject_name]
+        trials_df = perception_results_all[subject_name]
 
         start_offset = int(start_sec * 12)
         end_offset = int(end_sec * 12)
@@ -918,10 +911,10 @@ def calc_no_collisions_by_fbmod_for_time_window(subjects_data_full, subjects_dat
     all_summary = pd.concat(all_results, ignore_index=True)
     return all_summary
 
-def plot_collision_time_windows(all_summary_0_2, all_summary_2_4, window_1, window_2):
+def plot_collision_time_windows(all_summary_0_2, all_summary_2_4, window_1, window_2, color_palette):
     """
     Plots sequential box plots for auditory, Haptic, and Visual collisions
-    across 0-2s and 2-4s, grouped by Modality color (Set2).
+    across 0-2s and 2-4s, grouped by Modality color.
     """
     # 1. Make copies and label the time windows
     df1 = all_summary_0_2.copy()
@@ -953,7 +946,7 @@ def plot_collision_time_windows(all_summary_0_2, all_summary_2_4, window_1, wind
         y='collisions',
         hue='Modality',  # Forces the color to be tied to the modality
         order=order,
-        palette='Set2',  # Applying the Set2 palette
+        palette=color_palette,
         dodge=False,  # No dodging needed since each X-tick only has 1 box
         width=0.6,
         showfliers=False
@@ -970,104 +963,253 @@ def plot_collision_time_windows(all_summary_0_2, all_summary_2_4, window_1, wind
     plt.show()
 
 
-def plot_multiple_collision_time_windows(windows_list, subjects_data_full, subjects_data_trials, axes=None):
-    """
-    Plots stacked box plots (3 rows, 1 column) for Audio, Haptic, and Visual
-    collisions across time windows, with smooth mean curves overlaid.
+def _fit_gamma_collision_distribution(observed_counts, window_starts, window_ends, n_bootstrap=1000, random_state=42):
+    observed_counts = np.asarray(observed_counts, dtype=float)
+    observed_counts = np.clip(np.rint(observed_counts), 0, None).astype(int)
 
-    If `axes` (an array-like of 3 Matplotlib Axes) is provided, the plots are
-    drawn onto those axes instead of creating a new figure. This allows the
-    function to be embedded as a subplot block inside a larger dashboard.
+    window_starts = np.asarray(window_starts, dtype=float)
+    window_ends = np.asarray(window_ends, dtype=float)
+    window_midpoints = (window_starts + window_ends) / 2
+
+    total_collisions = int(observed_counts.sum())
+
+    if total_collisions < 4 or np.count_nonzero(observed_counts) < 2:
+        return {"shape": np.nan, "location": np.nan, "scale": np.nan, "gof_statistic": np.nan, "p-value": np.nan, "expected_counts": np.full(len(observed_counts), np.nan)}
+
+    collision_times = np.repeat(window_midpoints, observed_counts)
+
+    try:
+        # gamma.fit returns shape (a), loc, and scale
+        shape_a, location, scale = gamma.fit(collision_times)
+    except Exception:
+        return {"shape": np.nan, "location": np.nan, "scale": np.nan, "gof_statistic": np.nan, "p-value": np.nan, "expected_counts": np.full(len(observed_counts), np.nan)}
+
+    if not np.isfinite(scale) or scale <= 0:
+        return {"shape": np.nan, "location": np.nan, "scale": np.nan, "gof_statistic": np.nan, "p-value": np.nan, "expected_counts": np.full(len(observed_counts), np.nan)}
+
+    probabilities = gamma.cdf(window_ends, shape_a, loc=location, scale=scale) - gamma.cdf(window_starts, shape_a, loc=location, scale=scale)
+    probabilities = np.clip(probabilities, 1e-12, None)
+    probabilities = probabilities / probabilities.sum()
+
+    expected_counts = total_collisions * probabilities
+    observed_statistic = np.sum((observed_counts - expected_counts) ** 2 / expected_counts)
+
+    rng = np.random.default_rng(random_state)
+    bootstrap_statistics = []
+
+    for _ in range(n_bootstrap):
+        simulated_counts = rng.multinomial(total_collisions, probabilities)
+
+        if np.count_nonzero(simulated_counts) < 2:
+            continue
+
+        simulated_times = np.repeat(window_midpoints, simulated_counts)
+
+        try:
+            simulated_shape, simulated_location, simulated_scale = gamma.fit(simulated_times)
+
+            if not np.isfinite(simulated_scale) or simulated_scale <= 0:
+                continue
+
+            simulated_probabilities = gamma.cdf(window_ends, simulated_shape, loc=simulated_location, scale=simulated_scale) - gamma.cdf(window_starts, simulated_shape, loc=simulated_location, scale=simulated_scale)
+            simulated_probabilities = np.clip(simulated_probabilities, 1e-12, None)
+            simulated_probabilities = simulated_probabilities / simulated_probabilities.sum()
+
+            simulated_expected = total_collisions * simulated_probabilities
+            simulated_statistic = np.sum((simulated_counts - simulated_expected) ** 2 / simulated_expected)
+            bootstrap_statistics.append(simulated_statistic)
+
+        except Exception:
+            continue
+
+    if len(bootstrap_statistics) > 0:
+        bootstrap_statistics = np.asarray(bootstrap_statistics)
+        p_value = (np.sum(bootstrap_statistics >= observed_statistic) + 1) / (len(bootstrap_statistics) + 1)
+    else:
+        p_value = np.nan
+
+    return {
+        "shape": shape_a,
+        "location": location,
+        "scale": scale,
+        "gof_statistic": observed_statistic,
+        "p-value": p_value,
+        "expected_counts": expected_counts,
+    }
+
+
+def plot_multiple_collision_time_windows(step, experiment_logs_all, perception_results_all, color_palette,
+                                         axes=None, n_bootstrap=100):
     """
+    Plots collision boxplots across time windows for auditory, haptic and
+    visual modalities.
+
+    A Gamma temporal distribution is fitted to the median collisions
+    across the time windows for each modality, with dotted lines marking
+    the peak of the fitted curve. Subplot titles are removed in favor
+    of a color legend.
+    """
+
+
+    windows_list = [[i * step, (i + 1) * step] for i in range(int(6 / step))]
+
     standalone = axes is None
-    # 2. Run the calculation in a loop and combine the results
     window_summaries = []
-    for w in windows_list:
-        # Calculate for the specific window
-        summary_df = calc_no_collisions_by_fbmod_for_time_window(
-            subjects_data_full,
-            subjects_data_trials,
-            start_sec=w[0],
-            end_sec=w[1]
-        )
 
-        # Tag the dataframe with its specific time window
-        summary_df['Time Window'] = f'{w[0]}-{w[1]}s'
+    for window in windows_list:
+        summary_df = calc_no_collisions_by_fbmod_for_time_window(experiment_logs_all, perception_results_all,
+                                                                 start_sec=window[0], end_sec=window[1])
+        summary_df["Time Window"] = f"{window[0]}-{window[1]}s"
         window_summaries.append(summary_df)
 
-    # Combine all 5 windows into one large dataframe
     combined_all_windows = pd.concat(window_summaries, ignore_index=True)
+    combined_all_windows["Modality"] = combined_all_windows["Modality"].astype(str).str.strip().str.lower()
+    combined_all_windows["collisions"] = pd.to_numeric(combined_all_windows["collisions"], errors="coerce")
 
-    # 1. Define the exact order of time windows
-    time_order = [f"{w[0]}-{w[1]}s" for w in windows_list]
-    modalities = ['auditory', 'haptic', 'visual']
+    time_order = [f"{window[0]}-{window[1]}s" for window in windows_list]
+    window_starts = np.asarray([window[0] for window in windows_list], dtype=float)
+    window_ends = np.asarray([window[1] for window in windows_list], dtype=float)
+    window_midpoints = (window_starts + window_ends) / 2
+    modalities = ["visual", "auditory", "haptic"]
 
-    # 2. Extract colors from Set2 to match your previous styling
-    palette = sns.color_palette('Set2')
-    color_map = {'auditory': palette[0], 'haptic': palette[1], 'visual': palette[2]}
-
-    # 3. Create a vertically stacked grid (3 rows, 1 col)
-    # sharex and sharey ensure the scales match perfectly across all 3 modalities
     if standalone:
         fig, axes = plt.subplots(3, 1, figsize=(14, 12), sharex=True, sharey=True)
 
-    for i, mod in enumerate(modalities):
+    axes = np.atleast_1d(axes).flatten()
+
+    if len(axes) != 3:
+        raise ValueError(f"'axes' must contain exactly three axes, but {len(axes)} were provided.")
+
+    fit_records = []
+
+    for i, modality in enumerate(modalities):
         ax = axes[i]
+        modality_data = combined_all_windows.loc[combined_all_windows["Modality"] == modality].copy()
 
-        # Isolate the data for the current modality
-        mod_data = combined_all_windows[combined_all_windows['Modality'] == mod]
+        sns.boxplot(data=modality_data, x="Time Window", y="collisions", order=time_order,
+                    color=color_palette[modality], width=0.4, showfliers=False, boxprops={"alpha": 0.4}, ax=ax)
 
-        # 4. Plot Boxplot on the specific axis (ax)
-        sns.boxplot(
-            data=mod_data,
-            x='Time Window',
-            y='collisions',
-            order=time_order,
-            color=color_map[mod],
-            width=0.4,
-            showfliers=False,
-            boxprops={'alpha': 0.4},  # Transparency for the line
-            ax=ax
-        )
+        # Calculate totals (for the reporting table) and medians (for fitting and plotting)
+        observed_totals = modality_data.groupby("Time Window")["collisions"].sum().reindex(time_order,
+                                                                                           fill_value=0).to_numpy(
+            dtype=float)
+        observed_medians = modality_data.groupby("Time Window")["collisions"].median().reindex(time_order).to_numpy(
+            dtype=float)
 
-        # 5. Calculate and align the Means
-        means = mod_data.groupby('Time Window')['collisions'].mean().reset_index()
-        x_map = {cat: idx for idx, cat in enumerate(time_order)}
-        means['x'] = means['Time Window'].map(x_map)
-        means = means.sort_values('x')
 
-        x = means['x'].values
-        y = means['collisions'].values
 
-        # Scatter the exact mean points
-        ax.scatter(x, y, color=color_map[mod], s=70, edgecolor='black', zorder=5)
+        # Fit the Gamma distribution to the medians
+        fit_result = _fit_gamma_collision_distribution(observed_medians, window_starts, window_ends,
+                                                       n_bootstrap=n_bootstrap, random_state=42 + i)
 
-        # 6. Generate a smooth curve using a Cubic Spline
-        if len(x) >= 4:
-            x_smooth = np.linspace(x.min(), x.max(), 300)
-            spline = make_interp_spline(x, y, k=3)
-            y_smooth = spline(x_smooth)
-        else:
-            x_smooth, y_smooth = x, y
+        shape = fit_result["shape"]
+        location = fit_result["location"]
+        scale = fit_result["scale"]
+        p_value = fit_result["p-value"]
+        expected_medians = fit_result["expected_counts"]
 
-        ax.plot(x_smooth, y_smooth, color=color_map[mod], linewidth=3.5, zorder=4)
+        # ax.scatter(np.arange(len(time_order)), observed_medians, color=color_palette[modality], s=70, edgecolor="black",
+        #            linewidth=0.7, zorder=6, label="Observed median")
 
-        # 7. Customize each subplot's aesthetics
-        ax.set_title(f'{mod.capitalize()}', fontsize=13, fontweight='bold')
-        ax.set_ylabel('Collisions', fontsize=11)
-        ax.grid(axis='y', linestyle='--', alpha=0.7)
+        # Initialize base fit text
+        fit_text = "Gamma fit undefined"
+        peak_time_record = np.nan
+        peak_val_record = np.nan
 
-        # Only show the X-axis label on the very bottom plot
+        if np.all(np.isfinite([shape, location, scale])) and np.isfinite(expected_medians).sum() >= 2:
+            smooth_time = np.linspace(window_starts.min(), window_ends.max(), 400)
+            smooth_pdf = gamma.pdf(smooth_time, shape, loc=location, scale=scale)
+            midpoint_pdf = gamma.pdf(window_midpoints, shape, loc=location, scale=scale)
+
+            # Scale the PDF amplitude to match the observed medians via least-squares
+            valid_scale_mask = np.isfinite(observed_medians) & np.isfinite(midpoint_pdf)
+
+            if valid_scale_mask.sum() >= 2 and np.sum(midpoint_pdf[valid_scale_mask] ** 2) > 0:
+                amplitude = np.sum(observed_medians[valid_scale_mask] * midpoint_pdf[valid_scale_mask]) / np.sum(
+                    midpoint_pdf[valid_scale_mask] ** 2)
+            else:
+                amplitude = 1
+
+            smooth_collision_curve = amplitude * smooth_pdf
+            smooth_axis_positions = np.interp(smooth_time, window_midpoints, np.arange(len(time_order)))
+            ax.plot(smooth_axis_positions, smooth_collision_curve, color=color_palette[modality], linewidth=3, zorder=5,
+                    label="Gamma fit")
+
+            ax.scatter(np.arange(len(time_order)), expected_medians, marker="D", s=45, color=color_palette[modality],
+                       edgecolor="black", linewidth=0.7, zorder=7, label="Fitted window median")
+
+            # --- PEAK CALCULATION AND DOTTED LINES ---
+            peak_idx = np.argmax(smooth_collision_curve)
+            peak_y = smooth_collision_curve[peak_idx]
+            peak_x_plot = smooth_axis_positions[peak_idx]
+            peak_x_time = smooth_time[peak_idx]
+
+            # Get current axis limits to ensure lines draw cleanly to the edges
+            xmin, xmax = ax.get_xlim()
+            ymin, ymax = ax.get_ylim()
+
+            # Vertical dotted line down to the x-axis
+            ax.vlines(x=peak_x_plot, ymin=ymin, ymax=peak_y, color='gray', linestyle=':', linewidth=2, zorder=4)
+
+            # Horizontal dotted line across to the y-axis
+            ax.hlines(y=peak_y, xmin=xmin, xmax=peak_x_plot, color='gray', linestyle=':', linewidth=2, zorder=4)
+
+            # Highlight the exact peak point
+            ax.scatter(peak_x_plot, peak_y, color=color_palette[modality], marker='o', s=80, edgecolor='black',
+                       linewidth=1.2, zorder=8)
+
+            peak_time_record = peak_x_time
+            peak_val_record = peak_y
+            fit_text = f"Peak Time = {peak_x_time:.2f} s\nPeak Val = {peak_y:.1f}"
+
+        ax.text(0.02, 0.96, fit_text, transform=ax.transAxes, ha="left", va="top", fontsize=12,
+                bbox={"facecolor": "white", "edgecolor": "gray", "alpha": 0.85})
+        ax.set_ylabel("Collisions", fontsize=14)
+        ax.grid(axis="y", linestyle="--", alpha=0.7)
+
         if i == 2:
-            ax.set_xlabel('Time Window (seconds)', fontsize=12)
+            ax.set_xlabel("Time Window (seconds)", fontsize=14)
         else:
-            ax.set_xlabel('')
+            ax.set_xlabel("")
 
-    # 8. Final Layout Adjustments
-    # fig.suptitle('Collisions Over Time by Modality (0s to 5s)', fontsize=16, y=0.98)
+
+        fit_records.append({
+            "Modality": modality,
+            "Total collisions": int(np.nansum(observed_totals)),
+            "Gamma shape (a)": shape,
+            "Location": location,
+            "Scale": scale,
+            "GOF p-value": p_value,
+            "Peak Time (s)": peak_time_record,
+            "Peak Collisions": peak_val_record
+        })
+
+    custom_legend_handles = [
+        mpatches.Patch(color=color_palette['auditory'], label='Auditory'),
+        mpatches.Patch(color=color_palette['haptic'], label='Haptic'),
+        mpatches.Patch(color=color_palette['visual'], label='Visual'),
+        mlines.Line2D([], [], color='black', linewidth=2, label='Fitted Curve'),
+        mlines.Line2D([], [], color='black', marker='s', linestyle='None', markersize=7, label='Fitted Median')
+    ]
+
+    # Add it only to the top right of the first subplot
+    axes[0].legend(handles=custom_legend_handles, loc="upper right", fontsize=12)
+
+    gamma_fit_df = pd.DataFrame(fit_records)
+
+    print("\nGamma collision-distribution fits:")
+    print(gamma_fit_df.round(3).to_string(index=False))
+
     if standalone:
+        # Reset limits strictly to avoid the dotted lines expanding the plot area
+        for ax in axes:
+            ax.set_xlim(-0.5, len(time_order) - 0.5)
+
         plt.tight_layout()
         plt.show()
+
+    fig.savefig('gamma_distribution.pdf', format='pdf', bbox_inches='tight')
+
 
 def compare_time_windows_significance(all_summary_0_2, all_summary_2_4):
     """
@@ -1110,12 +1252,12 @@ def compare_time_windows_significance(all_summary_0_2, all_summary_2_4):
     return p_values
 
 
-def plot_no_collisions_by_fbmod_for_time_window(all_summary, start_sec, end_sec):
+def plot_no_collisions_by_fbmod_for_time_window(all_summary, start_sec, end_sec, color_palette):
 
 
     fig, ax = plt.subplots()
 
-    sns.boxplot(data=all_summary, x="Modality", y="collisions", hue="Modality", palette="Set2",
+    sns.boxplot(data=all_summary, x="Modality", y="collisions", hue="Modality", palette=color_palette,
         legend=False, ax=ax)
 
     ax.set_xlabel("Feedback Modality")
@@ -1329,7 +1471,7 @@ def final_coll_by_gr_p_val_df(final_collision_by_gr):
 #     plt.show()
 
 
-def plot_all_perceptions(subjects_data_trials, mod1='auditory', mod2='haptic', mod3='visual'):
+def plot_all_perceptions(perception_results_all, color_palette, mod1='auditory', mod2='haptic', mod3='visual'):
     modalities = [mod1, mod2, mod3]
 
     def degree_to_angle(d):
@@ -1348,14 +1490,13 @@ def plot_all_perceptions(subjects_data_trials, mod1='auditory', mod2='haptic', m
     def level_to_radius(l):
         return l * 1.4
 
-    palette = sns.color_palette('Set2')
-    color_map = {'auditory': palette[0], 'haptic': palette[1], 'visual': palette[2]}
+    color_map = color_palette
     base_scatter_size = 18
 
-    all_subject_dfs = [df for df in subjects_data_trials.values() if df is not None and not df.empty]
+    all_subject_dfs = [df for df in perception_results_all.values() if df is not None and not df.empty]
     full_data = pd.concat(all_subject_dfs, ignore_index=True)
-    full_data = full_data[full_data["Angle perceived"] > 0]
-    max_count = full_data.groupby(["Modality", "Angle", "Distance", "Angle perceived", "Distance perceived"]).size().max()
+    full_data = full_data[full_data["Perceived angle"] > 0]
+    max_count = full_data.groupby(["Modality", "Angle", "Distance", "Perceived angle", "Perceived distance"]).size().max()
     print(f"The maximum response count is: {max_count}")
 
 
@@ -1369,13 +1510,13 @@ def plot_all_perceptions(subjects_data_trials, mod1='auditory', mod2='haptic', m
         mod_color = color_map.get(fbmod, 'tab:blue')
         all_data = []
 
-        for subject_name, df in subjects_data_trials.items():
+        for subject_name, df in perception_results_all.items():
             if df is None or df.empty:
                 continue
             df_mod = df[df["Modality"] == fbmod].copy()
             # remove misses and setup misses
-            df_mod = df_mod[df_mod["Angle perceived"] > 0]
-            cols = ["Angle", "Distance", "Angle perceived", "Distance perceived"]
+            df_mod = df_mod[df_mod["Perceived angle"] > 0]
+            cols = ["Angle", "Distance", "Perceived angle", "Perceived distance"]
             if not df_mod.empty:
                 all_data.append(df_mod[cols])
 
@@ -1413,9 +1554,9 @@ def plot_all_perceptions(subjects_data_trials, mod1='auditory', mod2='haptic', m
                 # Perceived responses
                 # ------------------------------------------------------
                 if len(subset) > 0:
-                    grouped = (subset.groupby(["Angle perceived","Distance perceived"]).size().reset_index(name="count"))
-                    angles = grouped["Angle perceived"].apply(degree_to_angle)
-                    radii = grouped["Distance perceived"].apply(level_to_radius)
+                    grouped = (subset.groupby(["Perceived angle","Perceived distance"]).size().reset_index(name="count"))
+                    angles = grouped["Perceived angle"].apply(degree_to_angle)
+                    radii = grouped["Perceived distance"].apply(level_to_radius)
                     sizes = grouped["count"] * base_scatter_size
                     ax.scatter(angles, radii, s=sizes, alpha=0.6, color=mod_color, zorder=3, clip_on=False)
 
@@ -1566,7 +1707,7 @@ def evaluate_outliers_performance(outlier_names, subject_distributions):
 
 
 
-def plot_error_bars(results):
+def plot_error_bars(results, color_palette):
     # Safety check
     if results is None or results.empty:
         print("No error results available to plot.")
@@ -1608,7 +1749,7 @@ def plot_error_bars(results):
         y='count',
         hue='Modality',
         hue_order=modality_order,
-        palette="Set2",
+        palette=color_palette,
         ax=ax,
         edgecolor='black',  # Adds a subtle border to separate the bars cleanly
         linewidth=0.5
@@ -1666,80 +1807,6 @@ def amount_of_err_p_val_df(df):
     a_h_lvl_1_p_val = get_pairwise_p_value(a_lvl_1, h_lvl_1)
 
     pass
-
-
-def plot_error_boxplots(error_distribution):
-    """Plots the distribution of misses, angular errors, and radial distance errors."""
-
-    if error_distribution is None or error_distribution.empty:
-        return
-
-    sns.set_theme(style="whitegrid")
-
-    # Isolate columns to plot (ignoring 0 errors since they represent perfect hits)
-    angle_cols = [col for col in error_distribution.columns if col.startswith('Angle_err_') and col != 'Angle_err_0']
-    dist_cols = [col for col in error_distribution.columns if col.startswith('Dist_err_') and col != 'Dist_err_0']
-
-    # Add Miss_count at the very beginning of the list
-    all_cols = ['Miss_count'] + angle_cols + dist_cols
-
-    melted_df = error_distribution.melt(
-        id_vars=['Participant ID', 'Modality'],
-        value_vars=all_cols,
-        var_name='error_type',
-        value_name='count'
-    )
-
-    # Map the backend column names to clean, readable labels for the X-axis
-    label_mapping = {
-        'Miss_count': 'Misses',
-        **{col: col.replace('Angle_err_', 'Angle error: ') for col in angle_cols},
-        **{col: col.replace('Dist_err_', 'Distance error: ') for col in dist_cols}
-    }
-    melted_df['error_type'] = melted_df['error_type'].map(label_mapping)
-
-    # Standardize modality names for plotting
-    melted_df['Modality'] = melted_df['Modality'].str.lower()
-
-    # Define the new modality order
-    modality_order = ['auditory', 'haptic', 'visual']
-
-    # Extract Set2 colors and map them to the desired order
-    set2_colors = sns.color_palette("Set2")
-    custom_palette = {
-        'auditory': set2_colors[0],
-        'haptic': set2_colors[1],
-        'visual': set2_colors[2]
-    }
-
-    fig, ax = plt.subplots(figsize=(14, 6))
-
-    sns.boxplot(
-        data=melted_df,
-        x='error_type',
-        y='count',
-        hue='Modality',
-        hue_order=modality_order,
-        palette=custom_palette,
-        ax=ax
-    )
-
-    ax.set_ylabel("Count (per subject)", fontweight='bold')
-    ax.set_xlabel("")
-
-    # Force Y-axis to show integer ticks only
-    ax.yaxis.set_major_locator(mtick.MaxNLocator(integer=True))
-
-    plt.xticks(rotation=45, ha='right')
-
-    ax.legend(title='Modality', bbox_to_anchor=(1.01, 1), loc='upper left')
-
-    # Add subtle vertical lines to separate Misses, Angular, and Distance categories visually
-    ax.axvline(0.5, color='gray', linestyle=':', alpha=0.7)
-    ax.axvline(4.5, color='gray', linestyle=':', alpha=0.7)
-
-    plt.tight_layout()
-    plt.show()
 
 
 def plot_error_boxplots(error_distribution, color_palette):
@@ -1847,7 +1914,7 @@ def plot_weighted_error_means(error_results):
 
 
 
-def plot_answer_duration(subjects_data_trials):
+def plot_answer_duration(subjects_data_trials, color_palette):
     all_durations = []
 
     # Iterate through the dictionary
@@ -1903,13 +1970,13 @@ def plot_answer_duration(subjects_data_trials):
 
     fig, ax = plt.subplots(figsize=(5, 5))
 
-    # Boxplot using Set2 palette
+    # Boxplot using the shared modality color palette
     sns.boxplot(
         data=combined_df,
         x='Modality',
         y='Answer duration',
         order=modality_order,
-        palette="Set2",
+        palette=color_palette,
         ax=ax,
         showfliers=False
     )
@@ -2045,7 +2112,7 @@ def get_duration_p_value(subjects_data_trials):
     return p_val
 
 
-def plot_reaction_time(subjects_data_trials):
+def plot_reaction_time(subjects_data_trials, color_palette):
     all_reaction_times = []
 
     # Iterate through the dictionary
@@ -2110,13 +2177,13 @@ def plot_reaction_time(subjects_data_trials):
 
     fig, ax = plt.subplots(figsize=(5, 5))
 
-    # Boxplot using Set2 palette (no scattered data points per your request)
+    # Boxplot using the shared modality color palette (no scattered data points per your request)
     sns.boxplot(
         data=combined_df,
         x='Modality',
         y='reaction_time',
         order=modality_order,
-        palette="Set2",
+        palette=color_palette,
         ax=ax,
         showfliers=False
     )
@@ -2218,30 +2285,54 @@ def apply_auditory_delays(subjects_data_trials, delays_df):
     return shifted_data
 
 
-def plot_error_collision_tradeoff(subjects_data_trials, subjects_data_full):
+def plot_error_collision_tradeoff(perception_results_all, experiment_logs_all):
     stats_list = []
 
-    for subject_name, df in subjects_data_trials.items():
-        # Skip empty dataframes if any
-        if df is None or df.empty:
+    for subject_name, perc_df in perception_results_all.items():
+        # Get corresponding log dataframe for the collisions
+        log_df = experiment_logs_all.get(subject_name)
+
+        # Skip if either dataframe is missing or empty
+        if perc_df is None or perc_df.empty or log_df is None or log_df.empty:
             continue
 
-        # 1. Filter out trials where perceived values are -1 (should not be counted)
-        df_filtered = df[(df['Perceived angle'] != -1) & (df['Perceived distance'] != -1)]
+        # =========================================================
+        # 1. Calculate Total Errors (from perception_results_all)
+        # =========================================================
+        # Filter out trials where perceived values are -1 or 0
+        df_filtered = perc_df[(perc_df['Perceived angle'] != -1) & (perc_df['Perceived angle'] != 0)]
 
-        # 2. Count errors (where actual degree/level does not match perceived degree/level)
-        # Note: perceived values of 0 (missed) naturally count as errors here
-        errors = ((df_filtered['degree'] != df_filtered['Perceived angle']) |
-                  (df_filtered['level'] != df_filtered['Perceived distance'])).sum()
+        # Handle potential typo in the column name from the original code
+        dist_col = 'Distance' if 'Distance' in df_filtered.columns else 'Distnce'
 
-        # 3. Get the last recorded number of collisions for the subject
-        last_collisions = df['number_of_collision'].iloc[-1]
+        # Count total errors (where actual angle/distance does not match perceived angle/distance)
+        total_errors = ((df_filtered['Angle'] != df_filtered['Perceived angle']) |
+                        (df_filtered[dist_col] != df_filtered['Perceived distance'])).sum()
 
-        # Append the metrics for this subject
+        # =========================================================
+        # 2. Calculate Total Collisions (from experiment_logs_all)
+        # =========================================================
+        if 'Number of collision' not in log_df.columns:
+            continue
+
+        # Ensure it's numeric before doing math
+        log_df_copy = log_df.copy()
+        log_df_copy['Number of collision'] = pd.to_numeric(log_df_copy['Number of collision'], errors='coerce')
+
+        # Subtract min from max to get the true total accumulated over the entire experiment
+        total_collisions = log_df_copy['Number of collision'].max() - log_df_copy['Number of collision'].min()
+
+        # Handle potential NaNs if the log data was invalid
+        if pd.isna(total_collisions):
+            continue
+
+        # =========================================================
+        # 3. Store Metrics
+        # =========================================================
         stats_list.append({
             'Subject': subject_name,
-            'Total Errors': errors,
-            'Total Collisions': last_collisions
+            'Total Errors': total_errors,
+            'Total Collisions': total_collisions
         })
 
     # Convert summary to a DataFrame
@@ -2249,9 +2340,9 @@ def plot_error_collision_tradeoff(subjects_data_trials, subjects_data_full):
 
     if df_summary.empty:
         print("No valid subject data available to plot.")
-        return
+        return None
 
-    # --- NEW: Calculate Pearson correlation ---
+    # --- Calculate Pearson correlation ---
     r, p_value = stats.pearsonr(df_summary['Total Errors'], df_summary['Total Collisions'])
 
     # 4. Plot the Scatter Plot with a Regression Line
@@ -2261,13 +2352,113 @@ def plot_error_collision_tradeoff(subjects_data_trials, subjects_data_full):
         data=df_summary,
         x='Total Errors',
         y='Total Collisions',
-        scatter_kws={'s': 60, 'alpha': 0.8, 'color': '#1f77b4'},  # Customize dots
-        line_kws={'color': '#d62728', 'linewidth': 2}  # Customize regression line
+        scatter_kws={'s': 60, 'alpha': 0.8, 'color': '#1f77b4'},  # Blue dots
+        line_kws={'color': '#d62728', 'linewidth': 2}  # Red regression line
     )
 
-    # --- NEW: Add the Pearson value to the plot ---
-    # Create a formatted string for the r and p values
-    stats_text = f'Pearson r = {r:.2f}\n'
+    # --- Add the Pearson value to the plot ---
+    stats_text = f'Pearson r = {r:.2f}\np-value = {p_value:.3f}'
+
+    # Place text in the upper left corner of the axes (0.05, 0.95)
+    props = dict(boxstyle='round', facecolor='white', alpha=0.8, edgecolor='gray')
+    ax.text(0.05, 0.95, stats_text, transform=ax.transAxes, fontsize=12,
+            verticalalignment='top', bbox=props, fontweight='bold')
+
+    # 5. Labels and Layout
+    plt.title('Dual-Task Trade-off: Total Perception Errors vs. Total Collisions', fontsize=14, fontweight='bold')
+    plt.xlabel('Total Errors (Angle or Distance Misperceptions)', fontsize=12, fontweight='bold')
+    plt.ylabel('Total Collisions (Over Entire Experiment)', fontsize=12, fontweight='bold')
+    plt.grid(True, linestyle='--', alpha=0.5)
+
+    plt.tight_layout()
+    plt.show()
+
+
+
+def plot_difficulty_error_collision_tradeoff(perception_results_all, experiment_logs_all, difficulty):
+    stats_list = []
+
+    # Ensure matching is case-insensitive
+    difficulty = difficulty.lower()
+
+    for subject_name, perc_df in perception_results_all.items():
+        # Get corresponding log dataframe for the collisions
+        log_df = experiment_logs_all.get(subject_name)
+
+        # Skip if either dataframe is missing or empty
+        if perc_df is None or perc_df.empty or log_df is None or log_df.empty:
+            continue
+
+        if 'Difficulty level' not in perc_df.columns or 'Difficulty level' not in log_df.columns:
+            continue
+
+        # =========================================================
+        # 1. Calculate Errors (from perception_results_all)
+        # =========================================================
+        df_diff_perc = perc_df[perc_df['Difficulty level'].astype(str).str.strip().str.lower() == difficulty]
+
+        if df_diff_perc.empty:
+            continue
+
+        # Filter out trials where perceived values are -1 or 0
+        df_diff_filtered = df_diff_perc[
+            (df_diff_perc['Perceived angle'] != -1) & (df_diff_perc['Perceived angle'] != 0)]
+
+        # Count errors specifically in this phase
+        diff_errors = ((df_diff_filtered['Angle'] != df_diff_filtered['Perceived angle']) |
+                       (df_diff_filtered['Distance'] != df_diff_filtered['Perceived distance'])).sum()
+
+        # =========================================================
+        # 2. Calculate Collisions (from experiment_logs_all)
+        # =========================================================
+        df_diff_log = log_df[log_df['Difficulty level'].astype(str).str.strip().str.lower() == difficulty].copy()
+
+        if df_diff_log.empty or 'Number of collision' not in df_diff_log.columns:
+            continue
+
+        # Ensure it's numeric before doing math
+        df_diff_log['Number of collision'] = pd.to_numeric(df_diff_log['Number of collision'], errors='coerce')
+
+        # Assuming 'Number of collision' is cumulative, subtract the min count from the max count
+        diff_collisions = df_diff_log['Number of collision'].max() - df_diff_log['Number of collision'].min()
+
+        # Handle potential NaNs if the log data was invalid
+        if pd.isna(diff_collisions):
+            continue
+
+        # =========================================================
+        # 3. Store Metrics
+        # =========================================================
+        stats_list.append({
+            'Subject': subject_name,
+            f'{difficulty.capitalize()} Errors': diff_errors,
+            f'{difficulty.capitalize()} Collisions': diff_collisions
+        })
+
+    # Convert summary to a DataFrame
+    df_summary = pd.DataFrame(stats_list)
+
+    if df_summary.empty:
+        print(f"No valid subject data available for the {difficulty} phase to plot.")
+        return None
+
+    # --- Calculate Pearson correlation ---
+    r, p = stats.pearsonr(df_summary[f'{difficulty.capitalize()} Errors'],
+                          df_summary[f'{difficulty.capitalize()} Collisions'])
+
+    # 4. Plot the Scatter Plot with a Regression Line
+    plt.figure(figsize=(8, 6))
+
+    ax = sns.regplot(
+        data=df_summary,
+        x=f'{difficulty.capitalize()} Errors',
+        y=f'{difficulty.capitalize()} Collisions',
+        scatter_kws={'s': 60, 'alpha': 0.8, 'color': '#ff7f0e'},
+        line_kws={'color': '#d62728', 'linewidth': 2}
+    )
+
+    # --- Add the Pearson value to the plot ---
+    stats_text = f'Pearson r = {r:.2f}\np-value = {p:.3f}'
 
     # Place text in the upper left corner of the axes (0.05, 0.95)
     props = dict(boxstyle='round', facecolor='white', alpha=0.8, edgecolor='gray')
@@ -2275,88 +2466,15 @@ def plot_error_collision_tradeoff(subjects_data_trials, subjects_data_full):
             verticalalignment='top', bbox=props)
 
     # 5. Labels and Layout
-    plt.title('Dual-Task Trade-off: Perception Errors vs. Total Collisions', fontsize=14)
-    plt.xlabel('Total Errors (Degree or Level Misperceptions)', fontsize=12)
-    plt.ylabel('Total Collisions (Final Count)', fontsize=12)
+    plt.title(f'{difficulty.capitalize()} Phase Trade-off: Perception Errors vs. Collisions', fontsize=14,
+              fontweight='bold')
+    plt.xlabel(f'Errors in {difficulty.capitalize()} Phase', fontsize=12)
+    plt.ylabel(f'Collisions in {difficulty.capitalize()} Phase', fontsize=12)
     plt.grid(True, linestyle='--', alpha=0.5)
 
     plt.tight_layout()
     plt.show()
 
-
-def plot_difficulty_error_collision_tradeoff(subjects_data_trials, difficulty):
-    stats_list = []
-
-    for subject_name, df in subjects_data_trials.items():
-        # Skip empty dataframes if any
-        if df is None or df.empty:
-            continue
-
-        # 1. Filter for hard difficulty phase
-        if difficulty == 'easy': gr = 15
-        elif difficulty == 'medium': gr = 20
-        elif difficulty == 'hard': gr = 25
-        df_hard = df[df['generation_rate'] == gr]
-
-        # Skip if subject has no data for the hard phase
-        if df_hard.empty:
-            continue
-
-        # 2. Filter out trials where perceived values are -1
-        df_hard_filtered = df_hard[(df_hard['Perceived angle'] != -1) | (df_hard['Perceived angle'] != 0)]
-
-        # 3. Count errors specifically in the hard phase
-        hard_errors = ((df_hard_filtered['degree'] != df_hard_filtered['Perceived angle']) |
-                       (df_hard_filtered['level'] != df_hard_filtered['Perceived distance'])).sum()
-
-        # 4. Get collisions specifically in the hard phase
-        # Assuming 'number_of_collision' is cumulative, we subtract the starting count from the ending count
-        hard_collisions = df_hard['number_of_collision'].max() - df_hard['number_of_collision'].min()
-
-        # Append the metrics for this subject
-        stats_list.append({
-            'Subject': subject_name,
-            f'{difficulty} Errors': hard_errors,
-            f'{difficulty} Collisions': hard_collisions
-        })
-
-    # Convert summary to a DataFrame
-    df_summary = pd.DataFrame(stats_list)
-
-    if df_summary.empty:
-        print("No valid subject data available for the hard phase to plot.")
-        return
-
-    # --- Calculate Pearson correlation ---
-    r, _ = stats.pearsonr(df_summary[f'{difficulty} Errors'], df_summary[f'{difficulty} Collisions'])
-
-    # 5. Plot the Scatter Plot with a Regression Line
-    plt.figure(figsize=(8, 6))
-
-    ax = sns.regplot(
-        data=df_summary,
-        x=f'{difficulty} Errors',
-        y=f'{difficulty} Collisions',
-        scatter_kws={'s': 60, 'alpha': 0.8, 'color': '#ff7f0e'},  # Orange dots for hard mode
-        line_kws={'color': '#d62728', 'linewidth': 2}  # Red regression line
-    )
-
-    # --- Add the Pearson value to the plot ---
-    stats_text = f'Pearson r = {r:.2f}'
-
-    # Place text in the upper left corner of the axes (0.05, 0.95)
-    props = dict(boxstyle='round', facecolor='white', alpha=0.8, edgecolor='gray')
-    ax.text(0.05, 0.95, stats_text, transform=ax.transAxes, fontsize=12,
-            verticalalignment='top', bbox=props)
-
-    # 6. Labels and Layout
-    plt.title(f'{difficulty} Phase Trade-off: Perception Errors vs. Collisions', fontsize=14)
-    plt.xlabel('Errors in Hard Phase', fontsize=12)
-    plt.ylabel('Collisions in Hard Phase', fontsize=12)
-    plt.grid(True, linestyle='--', alpha=0.5)
-
-    plt.tight_layout()
-    plt.show()
 
 
 
@@ -2423,6 +2541,180 @@ def plot_misses_collision_tradeoff(subjects_data_trials, experiment_logs_all):
 
     plt.tight_layout()
     plt.show()
+
+
+def plot_unified_tradeoffs(perception_results_all, experiment_logs_all):
+    """
+    Combines difficulty-specific error trade-offs, overall accuracy trade-offs,
+    and overall misses trade-offs into a single 2x3 subplot grid.
+    """
+    # Create the figure grid
+    fig, axes = plt.subplots(2, 3, figsize=(18, 12))
+    axes = axes.flatten()
+
+    props = dict(boxstyle='round', facecolor='white', alpha=0.8, edgecolor='gray')
+
+    # =========================================================================
+    # 1-3. Difficulty-Specific Trade-offs (Easy, Medium, Hard) -> axes[0], [1], [2]
+    # =========================================================================
+    difficulties = ['easy', 'medium', 'hard']
+
+    for i, diff in enumerate(difficulties):
+        stats_list = []
+        for subject_name, perc_df in perception_results_all.items():
+            log_df = experiment_logs_all.get(subject_name)
+            if perc_df is None or perc_df.empty or log_df is None or log_df.empty:
+                continue
+            if 'Difficulty level' not in perc_df.columns or 'Difficulty level' not in log_df.columns:
+                continue
+
+            # Perception filter
+            df_diff_perc = perc_df[perc_df['Difficulty level'].astype(str).str.strip().str.lower() == diff]
+            if df_diff_perc.empty:
+                continue
+
+            df_diff_filtered = df_diff_perc[
+                (df_diff_perc['Perceived angle'] != -1) & (df_diff_perc['Perceived angle'] != 0)]
+            dist_col = 'Distance' if 'Distance' in df_diff_filtered.columns else 'Distnce'
+
+            diff_errors = ((df_diff_filtered['Angle'] != df_diff_filtered['Perceived angle']) |
+                           (df_diff_filtered[dist_col] != df_diff_filtered['Perceived distance'])).sum()
+
+            # Log filter
+            df_diff_log = log_df[log_df['Difficulty level'].astype(str).str.strip().str.lower() == diff].copy()
+            if df_diff_log.empty or 'Number of collision' not in df_diff_log.columns:
+                continue
+
+            df_diff_log['Number of collision'] = pd.to_numeric(df_diff_log['Number of collision'], errors='coerce')
+            diff_collisions = df_diff_log['Number of collision'].max() - df_diff_log['Number of collision'].min()
+
+            if pd.isna(diff_collisions):
+                continue
+
+            stats_list.append({f'{diff} Errors': diff_errors, f'{diff} Collisions': diff_collisions})
+
+        df_summary = pd.DataFrame(stats_list)
+
+        if not df_summary.empty and len(df_summary) > 1:
+            r, p = stats.pearsonr(df_summary[f'{diff} Errors'], df_summary[f'{diff} Collisions'])
+
+            sns.regplot(data=df_summary, x=f'{diff} Errors', y=f'{diff} Collisions', ax=axes[i],
+                        scatter_kws={'s': 60, 'alpha': 0.8, 'color': '#ff7f0e'},
+                        line_kws={'color': '#d62728', 'linewidth': 2})
+
+            stats_text = f'Pearson r = {r:.2f}\np-value = {p:.3f}'
+            axes[i].text(0.05, 0.95, stats_text, transform=axes[i].transAxes, fontsize=12,
+                         verticalalignment='top', bbox=props)
+
+        axes[i].set_title(f'{diff.capitalize()} Phase: Errors vs. Collisions', fontsize=13, fontweight='bold')
+        axes[i].set_xlabel(f'Errors in {diff.capitalize()} Phase', fontsize=11)
+        axes[i].set_ylabel(f'Collisions in {diff.capitalize()} Phase', fontsize=11)
+        axes[i].grid(True, linestyle='--', alpha=0.5)
+
+    # =========================================================================
+    # 4. Total Accuracy vs Total Collisions -> axes[3]
+    # =========================================================================
+    stats_list_tot = []
+    for subject_name, perc_df in perception_results_all.items():
+        log_df = experiment_logs_all.get(subject_name)
+        if perc_df is None or perc_df.empty or log_df is None or log_df.empty:
+            continue
+
+        # Perception total accuracy (ignore -1 hardware faults and 0 misses)
+        df_filtered = perc_df[(perc_df['Perceived angle'] > 0) & (perc_df['Perceived distance'] > 0)]
+        if df_filtered.empty:
+            continue
+
+        dist_col = 'Distance' if 'Distance' in df_filtered.columns else 'Distnce'
+
+        # Count trials where BOTH angle and distance were correct
+        total_correct = ((df_filtered['Angle'] == df_filtered['Perceived angle']) &
+                         (df_filtered[dist_col] == df_filtered['Perceived distance'])).sum()
+
+        accuracy_pct = (total_correct / len(df_filtered)) * 100
+
+        # Log total collisions
+        if 'Number of collision' not in log_df.columns:
+            continue
+        log_df_copy = log_df.copy()
+        log_df_copy['Number of collision'] = pd.to_numeric(log_df_copy['Number of collision'], errors='coerce')
+        total_collisions = log_df_copy['Number of collision'].max() - log_df_copy['Number of collision'].min()
+
+        if pd.isna(total_collisions):
+            continue
+
+        stats_list_tot.append({'Total Accuracy (%)': accuracy_pct, 'Total Collisions': total_collisions})
+
+    df_tot = pd.DataFrame(stats_list_tot)
+    if not df_tot.empty and len(df_tot) > 1:
+        r, p_value = stats.pearsonr(df_tot['Total Accuracy (%)'], df_tot['Total Collisions'])
+
+        sns.regplot(data=df_tot, x='Total Accuracy (%)', y='Total Collisions', ax=axes[3],
+                    scatter_kws={'s': 60, 'alpha': 0.8, 'color': '#1f77b4'},
+                    line_kws={'color': '#d62728', 'linewidth': 2})
+
+        stats_text = f'Pearson r = {r:.2f}\np-value = {p_value:.3f}'
+        axes[3].text(0.05, 0.95, stats_text, transform=axes[3].transAxes, fontsize=12,
+                     verticalalignment='top', bbox=props, fontweight='bold')
+
+    axes[3].set_title('Overall: Total Accuracy vs. Collisions', fontsize=13, fontweight='bold')
+    axes[3].set_xlabel('Total Accuracy (%)', fontsize=11, fontweight='bold')
+    axes[3].set_ylabel('Total Collisions', fontsize=11, fontweight='bold')
+    axes[3].grid(True, linestyle='--', alpha=0.5)
+
+    # =========================================================================
+    # 5. Total Misses vs Total Collisions -> axes[4]
+    # =========================================================================
+    stats_list_misses = []
+    for subject_name, perc_df in perception_results_all.items():
+        log_df = experiment_logs_all.get(subject_name)
+        if perc_df is None or perc_df.empty or log_df is None or log_df.empty:
+            continue
+
+        # Perception misses (perceived == 0)
+        df_filtered = perc_df[(perc_df['Perceived angle'] != -1) & (perc_df['Perceived distance'] != -1)]
+        misses = ((df_filtered['Perceived angle'] == 0) | (df_filtered['Perceived distance'] == 0)).sum()
+
+        # Log total collisions
+        if 'Number of collision' not in log_df.columns:
+            continue
+        log_df_copy = log_df.copy()
+        log_df_copy['Number of collision'] = pd.to_numeric(log_df_copy['Number of collision'], errors='coerce')
+        total_collisions = log_df_copy['Number of collision'].max() - log_df_copy['Number of collision'].min()
+
+        if pd.isna(total_collisions):
+            continue
+
+        stats_list_misses.append({'Total Misses': misses, 'Total Collisions': total_collisions})
+
+    df_misses = pd.DataFrame(stats_list_misses)
+    if not df_misses.empty and len(df_misses) > 1:
+        # User requested to only show Pearson r for this specific plot
+        r, _ = stats.pearsonr(df_misses['Total Misses'], df_misses['Total Collisions'])
+
+        sns.regplot(data=df_misses, x='Total Misses', y='Total Collisions', ax=axes[4],
+                    scatter_kws={'s': 60, 'alpha': 0.8, 'color': '#2ca02c'},
+                    line_kws={'color': '#d62728', 'linewidth': 2})
+
+        stats_text = f'Pearson r = {r:.2f}'
+        axes[4].text(0.05, 0.95, stats_text, transform=axes[4].transAxes, fontsize=12,
+                     verticalalignment='top', bbox=props)
+
+    axes[4].set_title('Overall: Perception Misses vs. Collisions', fontsize=13, fontweight='bold')
+    axes[4].set_xlabel('Total Misses (Perceived == 0)', fontsize=11, fontweight='bold')
+    axes[4].set_ylabel('Total Collisions', fontsize=11, fontweight='bold')
+    axes[4].grid(True, linestyle='--', alpha=0.5)
+
+    # =========================================================================
+    # 6. Clean Up and Display
+    # =========================================================================
+    # Remove the 6th empty subplot
+    fig.delaxes(axes[5])
+
+    plt.tight_layout(pad=2.0)
+    plt.show()
+
+
 
 
 def plot_tradeoff_groups_error(subjects_data_trials, experiment_logs_all):
