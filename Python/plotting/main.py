@@ -6,24 +6,25 @@ from utils_results_paper import *
 
 def exp_performance_full():
     subjects_data_path_part = '../temp-data-for-plotting'
-    subjects_data_path_full = '../s1-s2-j'
-    subjects_data_path = subjects_data_path_full
-    subject_names = os.listdir(subjects_data_path)
-    subjects_data_trials = get_subjects_data_trials_df(subject_names, subjects_data_path)
-    subjects_data_full = get_subjects_data_full_df(subject_names, subjects_data_path)
+    # subjects_data_path_full = '../s1-s2-j'
+    # subjects_data_path = subjects_data_path_full
+    # subject_names = os.listdir(subjects_data_path)
+    # subjects_data_trials = get_subjects_data_trials_df(subject_names, subjects_data_path)
+    # subjects_data_full = get_subjects_data_full_df(subject_names, subjects_data_path)
 
-    plot_difficulty_error_collision_tradeoff(subjects_data_trials, 'hard')
-    plot_error_collision_tradeoff(subjects_data_trials, subjects_data_full)
+    # plot_difficulty_error_collision_tradeoff(subjects_data_trials, 'hard')
+    # plot_error_collision_tradeoff(subjects_data_trials, subjects_data_full)
 
 
 
-    plot_mean_head_position_heatmap(subjects_data_full, bins=5)
-    plot_thumbstick_heatmap(subjects_data_full, bins=5)
-    plot_collisions_over_time_by_difficulty(subjects_data_full)
-    plot_collisions_by_difficulty(subjects_data_full)
+    # plot_mean_head_position_heatmap(subjects_data_full, bins=5)
+    # plot_thumbstick_heatmap(subjects_data_full, bins=5)
+    # plot_collisions_over_time_by_difficulty(subjects_data_full)
+    # plot_collisions_by_difficulty(subjects_data_full)
     # temp = final_coll_by_gr_p_val_df(final_collision_by_gr)
-
-
+    # analyze_and_plot_joystick_variance(experiment_logs_all)
+    df_multivariate = run_multivariate_joystick_analysis(experiment_logs_all, n_permutations=999)
+    plot_multivariate_joystick(df_multivariate)
 def exp_performance_trials(color_palette):
 
     # all_miss_counts = get_all_miss_counts(subjects_data_trials)
@@ -92,6 +93,9 @@ def exp_performance_trials(color_palette):
     # plot_misses_vs_errors(perception_results_all)
 
     # get_missed_invalidated_trials_percentage(perception_results_all)
+    print_collision_statistics_by_difficulty(experiment_logs_all)
+
+
     pass
 def questionnaire():
 
@@ -188,6 +192,11 @@ def exp_results_paper():
     # Spider
     # plot_modality_spider_chart(perception_results_all, color_palette)
 
+
+
+    # plot_accuracy_by_modality_and_difficulty(perception_results_all, color_palette, axes=None)
+
+    plot_modality_accuracy(perception_results_all, modality_column="Modality", figsize=(16, 7))
     pass
 
 
@@ -208,13 +217,23 @@ def exp_results_paper_final():
     # plot_adaptation_index_by_difficulty(experiment_logs_all, bin_size=5, deviation_percent=5)
     # analyze_individual_adaptation(experiment_logs_all, bin_size=5)
 
-    # Gender differences - No statistical significance
+    # condition differences
     # plot_performance_by_condition(perception_results_all, experiment_logs_all, color_palette, axes=None)
+
+    # Extreme participants to remove
+    # print_extreme_participants(perception_results_all, experiment_logs_all, demographics_path)
+
+    # gender difference
+    # plot_performance_by_gender(perception_results_all, experiment_logs_all, demographics_path, color_palette)
+
+
+
 
     # Trade offs
     # plot_unified_tradeoffs(perception_results_all, experiment_logs_all)
 
-
+    # plot_accuracy_by_modality_and_difficulty(perception_results_all, color_palette, axes=None)
+    #
     ...
 
 
@@ -224,14 +243,16 @@ def exp_results_paper_final_2():
     '''
 
     # Modality analysis
-    plot_performance_and_polar_accuracy(perception_results_all, experiment_logs_all, color_palette, axes=None)
+    # plot_performance_and_polar_accuracy(perception_results_all, experiment_logs_all, color_palette, axes=None)
+
+    # Difficulty analysis
+    # analyze_attention_redistribution(perception_results_all, experiment_logs_all, demographics)
 
 
     # CLFE
     # plot_multiple_collision_time_windows(0.5, experiment_logs_all, perception_results_all, color_palette)
 
-    # Difficulty analysis
-    analyze_attention_redistribution(perception_results_all, experiment_logs_all, demographics)
+
 
     # Meta cognition, Q5, Q10, Q11, Q12
     plot_unified_performance_correlations(perception_results_all, experiment_logs_all, df_questionnaire_final,
@@ -239,27 +260,50 @@ def exp_results_paper_final_2():
 
     pass
 
+
+def exp_results_thesis():
+    """
+    Five thesis-grade figures focused on complementary insights that are not
+    part of `exp_results_paper_final` / `exp_results_paper_final_2`.
+    """
+
+    # 1) Condition-level performance landscape (accuracy + misses)
+    plot_modality_difficulty_performance_matrices(perception_results_all, color_palette)
+
+    # 2) Accuracy-collision efficiency frontier by modality
+    plot_efficiency_frontier_by_modality(perception_results_all, experiment_logs_all, color_palette)
+
+    # 3) Early-vs-late learning shifts (speed and accuracy)
+    plot_learning_shift_early_vs_late(perception_results_all, color_palette)
+
+    # 4) Spatial error landscape across true angle and distance
+    plot_spatial_error_landscape(perception_results_all, color_palette)
+
+    # 5) Workload-performance coupling by difficulty
+    plot_workload_vs_accuracy_by_difficulty(perception_results_all, experiment_logs_all, color_palette)
+
 if __name__ == "__main__":
 
-    color_palette = {'visual': '#99DDFF', 'auditory': '#BBCC33', 'haptic': '#EE8866', 'total': '#2205d1',
+    color_palette = {'visual': '#8cc5e3', 'auditory': '#b5d1ae', 'haptic': '#ffbb6f', 'total': '#2205d1',
                      'collision': '#8a754d', 'male': '#525EFF', 'female':'#C052FF',
                      'easy': '#AEFF52', 'medium':'#FFE252' , 'hard':'#FF5252'}
     data_path = '../Dataset/Dataset/Recordings'
     demographics_path = '../Dataset/Dataset/Metadata/Demographics.csv'
     # demographics_data_path = '../Dataset/Dataset/Metadata/Demographics.csv'
     # subject_names = os.listdir(data_path)
-    perception_results_all = get_perception_results_df(data_path)
-    experiment_logs_all = get_experiment_logs_df(data_path)
+    participants_to_remove = [] # '05', '14', '39', '20'   '33', '34', '20', '46'    '33', '34', '20', '30', '46', '05'
+    perception_results_all = get_perception_results_df(data_path, participants_to_remove)
+    experiment_logs_all = get_experiment_logs_df(data_path, participants_to_remove)
     df_questionnaire_final = pd.read_csv('../Dataset/Dataset/Questionnaire/final.csv')
     df_questionnaire_mid = pd.read_csv('../Dataset/Dataset/Questionnaire/mid.csv')
     demographics = pd.read_csv(demographics_path)
-
 
     # exp_performance_full()
     # exp_performance_trials(color_palette)
     # exp_results_paper()
     # exp_results_paper_final()
-    exp_results_paper_final_2()
+    # exp_results_paper_final_2()
+    exp_results_thesis()
 
     # questionnaire()
     # demographic()

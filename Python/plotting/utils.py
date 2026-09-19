@@ -2,15 +2,19 @@ import os, time, warnings
 import pandas as pd, numpy as np, seaborn as sns
 import matplotlib.pyplot as plt, matplotlib.ticker as mtick, matplotlib.lines as mlines, matplotlib.patches as mpatches
 import scipy.stats as stats, scipy.cluster.hierarchy as sch
-
+from matplotlib.patches import Patch
+from collections import Counter
 from math import pi
 from itertools import combinations
 from matplotlib.lines import Line2D
 from scipy.interpolate import make_interp_spline
-from scipy.stats import gamma, skewnorm, spearmanr, pearsonr, ttest_ind, friedmanchisquare, wilcoxon, mannwhitneyu, ranksums
+from scipy.stats import ttest_rel, shapiro, gamma, skewnorm, spearmanr, pearsonr, ttest_ind, friedmanchisquare, wilcoxon, mannwhitneyu, ranksums
 from scipy.stats import ranksums, shapiro, ttest_ind, levene
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import AgglomerativeClustering
+from scipy.spatial.distance import pdist, squareform
+from statsmodels.multivariate.manova import MANOVA
+
 
 warnings.filterwarnings("ignore")
 def get_full_df_list():
@@ -72,34 +76,57 @@ def get_file_names(csv_files):
     return filenames
 
 
-def get_perception_results_df(data_path):
+def get_perception_results_df(data_path, participants_to_remove=None):
+    # Initialize as an empty list if no arguments are passed
+    if participants_to_remove is None:
+        participants_to_remove = []
+
     subjects_data_trials = {}
 
     for folder_name in sorted(os.listdir(data_path)):
+        # Skip this participant if they are in the removal list
+        if folder_name in participants_to_remove:
+            continue
+
         folder_path = os.path.join(data_path, folder_name)
 
         if not os.path.isdir(folder_path):
             continue
+
         csv_path = os.path.join(folder_path, "Perception results.csv")
-        trials_data = pd.read_csv(csv_path)
-        subjects_data_trials[folder_name] = trials_data
+
+        # Safely check if the file exists before reading
+        if os.path.exists(csv_path):
+            trials_data = pd.read_csv(csv_path)
+            subjects_data_trials[folder_name] = trials_data
 
     return subjects_data_trials
 
-def get_experiment_logs_df(data_path):
+
+def get_experiment_logs_df(data_path, participants_to_remove=None):
+    # Initialize as an empty list if no arguments are passed
+    if participants_to_remove is None:
+        participants_to_remove = []
+
     subjects_data_full = {}
 
     for folder_name in sorted(os.listdir(data_path)):
+        # Skip this participant if they are in the removal list
+        if folder_name in participants_to_remove:
+            continue
+
         folder_path = os.path.join(data_path, folder_name)
         if not os.path.isdir(folder_path):
             continue
+
         csv_path = os.path.join(folder_path, "Experiment logs.csv")
-        trials_data = pd.read_csv(csv_path)
-        subjects_data_full[folder_name] = trials_data
+
+        # Safely check if the file exists before reading
+        if os.path.exists(csv_path):
+            trials_data = pd.read_csv(csv_path)
+            subjects_data_full[folder_name] = trials_data
 
     return subjects_data_full
-
-
 
 def get_df_list(csv_files, file_path):
     df_list = []
@@ -1172,6 +1199,11 @@ def plot_multiple_collision_time_windows(step, experiment_logs_all, perception_r
         else:
             ax.set_xlabel("")
 
+        for ax in axes:
+            ax.spines["top"].set_visible(False)
+            ax.spines["right"].set_visible(False)
+            ax.spines["left"].set_color("black")
+            ax.spines["bottom"].set_color("black")
 
         fit_records.append({
             "Modality": modality,
@@ -1185,9 +1217,9 @@ def plot_multiple_collision_time_windows(step, experiment_logs_all, perception_r
         })
 
     custom_legend_handles = [
+        mpatches.Patch(color=color_palette['visual'], label='Visual'),
         mpatches.Patch(color=color_palette['auditory'], label='Auditory'),
         mpatches.Patch(color=color_palette['haptic'], label='Haptic'),
-        mpatches.Patch(color=color_palette['visual'], label='Visual'),
         mlines.Line2D([], [], color='black', linewidth=2, label='Fitted Curve'),
         mlines.Line2D([], [], color='black', marker='s', linestyle='None', markersize=7, label='Fitted Median')
     ]
@@ -3092,5 +3124,923 @@ def get_missed_invalidated_trials_percentage(subjects_data_trials):
             print("")
 
     print("=========================================")
+
+
+def print_collision_statistics_by_difficulty(experiment_logs_all):
+    """
+    Calculates and prints the min, max, median, and mean number of collisions
+    for Easy, Medium, and Hard difficulty levels across all participants.
+    """
+    collision_data = []
+
+    for subject, logs_df in experiment_logs_all.items():
+        # Check if valid dataframe and required columns exist
+        if logs_df is None or logs_df.empty or 'Number of collision' not in logs_df.columns or 'Difficulty level' not in logs_df.columns:
+            continue
+
+        valid_logs = logs_df.dropna(subset=['Number of collision', 'Difficulty level']).copy()
+        if valid_logs.empty:
+            continue
+
+        valid_logs['Number of collision'] = pd.to_numeric(valid_logs['Number of collision'], errors='coerce')
+        valid_logs['Difficulty level'] = valid_logs['Difficulty level'].astype(str).str.strip().str.lower()
+
+        # Calculate total collisions per phase for this subject
+        for diff in ['easy', 'medium', 'hard']:
+            diff_logs = valid_logs[valid_logs['Difficulty level'] == diff]
+            if not diff_logs.empty:
+                phase_col = diff_logs['Number of collision'].max() - diff_logs['Number of collision'].min()
+                if pd.notna(phase_col):
+                    collision_data.append({
+                        'Difficulty': diff.capitalize(),
+                        'Collisions': phase_col
+                    })
+
+    df_cols = pd.DataFrame(collision_data)
+
+    if df_cols.empty:
+        print("No valid collision data found.")
+        return None
+
+    # Group by difficulty and calculate statistics
+    stats_df = df_cols.groupby('Difficulty')['Collisions'].agg(
+        Min='min',
+        Max='max',
+        Median='median',
+        Mean='mean'
+    ).reset_index()
+
+    # Sort to ensure standard Easy -> Medium -> Hard order
+    difficulty_order = {'Easy': 0, 'Medium': 1, 'Hard': 2}
+    stats_df['Sort_Order'] = stats_df['Difficulty'].map(difficulty_order)
+    stats_df = stats_df.sort_values(by='Sort_Order').drop(columns=['Sort_Order'])
+
+    # Print the results
+    print("\n" + "=" * 65)
+    print("COLLISION STATISTICS BY DIFFICULTY")
+    print("=" * 65)
+    for _, row in stats_df.iterrows():
+        print(f"Difficulty: {row['Difficulty']:<8} | Min: {row['Min']:<4.0f} | Max: {row['Max']:<4.0f} | Median: {row['Median']:<6.1f} | Mean: {row['Mean']:<6.2f}")
+    print("=" * 65)
+
+    return stats_df
+
+
+def analyze_and_plot_joystick_variance(experiment_logs_all):
+    """
+    Calculates the variance of joystick magnitude for each participant across
+    Easy, Medium, and Hard difficulties. Performs pairwise Wilcoxon signed-rank
+    tests and plots a box plot with statistical annotations.
+    """
+    variance_data = []
+    difficulty_order = ['easy', 'medium', 'hard']
+
+    # 1. Process data and calculate magnitude variance
+    for subject, logs_df in experiment_logs_all.items():
+        if logs_df is None or logs_df.empty:
+            continue
+
+        if not {'Thumbstick x', 'Thumbstick y', 'Difficulty level'}.issubset(logs_df.columns):
+            continue
+
+        df_copy = logs_df.copy()
+        df_copy['Difficulty level'] = df_copy['Difficulty level'].astype(str).str.strip().str.lower()
+
+        for diff in difficulty_order:
+            phase_logs = df_copy[df_copy['Difficulty level'] == diff]
+
+            if phase_logs.empty:
+                continue
+
+            x_vals = pd.to_numeric(phase_logs['Thumbstick x'], errors='coerce')
+            y_vals = pd.to_numeric(phase_logs['Thumbstick y'], errors='coerce')
+
+            # Calculate magnitude: r = sqrt(x^2 + y^2)
+            magnitude = np.sqrt(x_vals ** 2 + y_vals ** 2)
+
+            # Calculate variance of the magnitude
+            mag_variance = magnitude.var()
+
+            if pd.notna(mag_variance):
+                variance_data.append({
+                    'Subject': subject,
+                    'Difficulty': diff.capitalize(),
+                    'Magnitude Variance': mag_variance
+                })
+
+    metrics_df = pd.DataFrame(variance_data)
+
+    if metrics_df.empty:
+        print("No valid joystick data found.")
+        return None
+
+    # Ensure correct categorical order for plotting
+    plot_order = ['Easy', 'Medium', 'Hard']
+    metrics_df['Difficulty'] = pd.Categorical(metrics_df['Difficulty'], categories=plot_order, ordered=True)
+
+    # 2. Prepare for statistical testing
+    # Pivot to align subject data row-by-row for paired testing
+    pivot_df = metrics_df.pivot(index='Subject', columns='Difficulty', values='Magnitude Variance')
+
+    pairs = [('Easy', 'Medium'), ('Medium', 'Hard'), ('Easy', 'Hard')]
+    p_values = {}
+
+    print("\n" + "=" * 50)
+    print("WILCOXON SIGNED-RANK TEST (PAIRED, NON-PARAMETRIC)")
+    print("=" * 50)
+
+    for diff1, diff2 in pairs:
+        # Drop any subjects missing data in either of the two difficulties being compared
+        paired_data = pivot_df[[diff1, diff2]].dropna()
+
+        if len(paired_data) < 2:
+            p_values[(diff1, diff2)] = np.nan
+            print(f"{diff1} vs {diff2}: Not enough data for paired test.")
+            continue
+
+        # Run Wilcoxon without checking normality
+        stat, p_val = wilcoxon(paired_data[diff1], paired_data[diff2], alternative='two-sided')
+        p_values[(diff1, diff2)] = p_val
+
+        p_str = "< 0.001" if p_val < 0.001 else f"= {p_val:.4f}"
+        print(f"{diff1:<6} vs {diff2:<6} | W = {stat:<6.1f} | p {p_str}")
+
+    print("=" * 50)
+
+    # 3. Plotting
+    sns.set_theme(style="whitegrid", context="paper", font_scale=1.2)
+    fig, ax = plt.subplots(figsize=(9, 6))
+
+    # Box plot
+    sns.boxplot(data=metrics_df, x='Difficulty', y='Magnitude Variance', order=plot_order,
+                palette='Set2', width=0.5, showmeans=True,
+                meanprops={"marker": "o", "markerfacecolor": "white", "markeredgecolor": "black"}, ax=ax)
+
+    # Overlay individual data points for transparency
+    sns.stripplot(data=metrics_df, x='Difficulty', y='Magnitude Variance', order=plot_order,
+                  color='black', alpha=0.5, jitter=True, ax=ax)
+
+    # 4. Statistical Annotations
+    y_max = metrics_df['Magnitude Variance'].max()
+    y_range = y_max - metrics_df['Magnitude Variance'].min()
+
+    # Heights for the bracket lines
+    h1 = y_max + (y_range * 0.05)  # Height for consecutive pairs (Easy-Med, Med-Hard)
+    h2 = y_max + (y_range * 0.15)  # Height for outer pair (Easy-Hard)
+
+    bracket_configs = [
+        ('Easy', 'Medium', 0, 1, h1),
+        ('Medium', 'Hard', 1, 2, h1),
+        ('Easy', 'Hard', 0, 2, h2)
+    ]
+
+    for diff1, diff2, x1, x2, height in bracket_configs:
+        p_val = p_values.get((diff1, diff2), np.nan)
+        if pd.isna(p_val):
+            continue
+
+        p_text = "p < 0.001" if p_val < 0.001 else f"p = {p_val:.3f}"
+
+        # Determine font weight based on significance (alpha = 0.05)
+        weight = "bold" if p_val < 0.05 else "normal"
+
+        # Draw bracket
+        ax.plot([x1, x1, x2, x2], [height - y_range * 0.02, height, height, height - y_range * 0.02],
+                lw=1.5, color='black')
+
+        # Add text
+        ax.text((x1 + x2) * 0.5, height + y_range * 0.01, p_text, ha='center', va='bottom',
+                color='black', fontsize=11, fontweight=weight)
+
+    # Adjust y-limit to fit annotations
+    ax.set_ylim(bottom=max(0, metrics_df['Magnitude Variance'].min() - y_range * 0.05),
+                top=h2 + (y_range * 0.1))
+
+    ax.set_title("Joystick Magnitude Variance Across Difficulties", fontweight='bold', fontsize=14, pad=15)
+    ax.set_ylabel("Variance of Magnitude ($r^2$)", fontweight='bold')
+    ax.set_xlabel("Difficulty", fontweight='bold')
+
+    plt.tight_layout()
+    plt.show()
+
+
+def run_multivariate_joystick_analysis(experiment_logs_all, n_permutations=999):
+    """
+    Calculates 2D Joystick Variances (X and Y) per participant and difficulty,
+    then runs both:
+      1. Parametric: Multivariate Analysis of Variance (MANOVA)
+      2. Non-Parametric: Permutational Multivariate Analysis (PERMANOVA-style)
+    """
+    data_list = []
+    difficulty_order = ['easy', 'medium', 'hard']
+
+    # 1. Extract 2D variances (X and Y separately)
+    for subject, logs_df in experiment_logs_all.items():
+        if logs_df is None or logs_df.empty:
+            continue
+        if not {'Thumbstick x', 'Thumbstick y', 'Difficulty level'}.issubset(logs_df.columns):
+            continue
+
+        df_copy = logs_df.copy()
+        df_copy['Difficulty level'] = df_copy['Difficulty level'].astype(str).str.strip().str.lower()
+
+        for diff in difficulty_order:
+            phase_logs = df_copy[df_copy['Difficulty level'] == diff]
+            if phase_logs.empty:
+                continue
+
+            x_vals = pd.to_numeric(phase_logs['Thumbstick x'], errors='coerce')
+            y_vals = pd.to_numeric(phase_logs['Thumbstick y'], errors='coerce')
+
+            var_x = x_vals.var()
+            var_y = y_vals.var()
+
+            if pd.notna(var_x) and pd.notna(var_y):
+                data_list.append({
+                    'Subject': subject,
+                    'Difficulty': diff.capitalize(),
+                    'Var_X': var_x,
+                    'Var_Y': var_y
+                })
+
+    df = pd.DataFrame(data_list)
+    if df.empty:
+        print("No valid 2D joystick data found.")
+        return None
+
+    # Keep only subjects who completed all 3 phases
+    counts = df.groupby('Subject')['Difficulty'].nunique()
+    complete_subjects = counts[counts == 3].index
+    df = df[df['Subject'].isin(complete_subjects)].copy()
+
+    print("=" * 80)
+    print(f"MULTIVARIATE ANALYSIS (2D Joystick: Var_X & Var_Y) | N = {df['Subject'].nunique()} subjects")
+    print("=" * 80)
+
+    # -------------------------------------------------------------
+    # METHOD 1: Parametric MANOVA
+    # -------------------------------------------------------------
+    print("\n" + "-" * 35 + " 1. PARAMETRIC MANOVA " + "-" * 35)
+    try:
+        manova_model = MANOVA.from_formula('Var_X + Var_Y ~ C(Difficulty)', data=df)
+        manova_res = manova_model.mv_test()
+        print(manova_res)
+    except Exception as e:
+        print(f"Error in MANOVA calculation: {e}")
+
+    # -------------------------------------------------------------
+    # METHOD 2: Non-Parametric Permutational Multivariate Test (PERMANOVA)
+    # -------------------------------------------------------------
+    print("-" * 30 + " 2. NON-PARAMETRIC PERMANOVA " + "-" * 30)
+
+    # Coordinates in 2D space: [Var_X, Var_Y]
+    X_coords = df[['Var_X', 'Var_Y']].values
+    groups = df['Difficulty'].values
+    unique_groups = np.unique(groups)
+    g = len(unique_groups)
+    n = len(df)
+
+    # Pairwise Euclidean Distance Matrix
+    D = squareform(pdist(X_coords, metric='euclidean'))
+
+    def compute_pseudo_f(dist_mat, grp_labels):
+        """Calculates Anderson's Pseudo-F statistic from a distance matrix."""
+        # Total Sum of Squares (SST)
+        sst = np.sum(dist_mat ** 2) / (2 * n)
+
+        # Within-group Sum of Squares (SSW)
+        ssw = 0.0
+        for grp in unique_groups:
+            idx = np.where(grp_labels == grp)[0]
+            n_grp = len(idx)
+            if n_grp > 1:
+                sub_d = dist_mat[np.ix_(idx, idx)]
+                ssw += np.sum(sub_d ** 2) / (2 * n_grp)
+
+        ssb = sst - ssw  # Between-group Sum of Squares
+        df_b = g - 1
+        df_w = n - g
+        pseudo_f = (ssb / df_b) / (ssw / df_w) if ssw > 0 else 0.0
+        return pseudo_f
+
+    # Observed statistic
+    obs_f = compute_pseudo_f(D, groups)
+
+    # Permutation Test (shuffling difficulty labels)
+    np.random.seed(42)
+    perm_f = []
+    for _ in range(n_permutations):
+        shuffled_groups = np.random.permutation(groups)
+        perm_f.append(compute_pseudo_f(D, shuffled_groups))
+
+    perm_f = np.array(perm_f)
+    p_permanova = (np.sum(perm_f >= obs_f) + 1) / (n_permutations + 1)
+
+    print(f"Number of Permutations : {n_permutations}")
+    print(f"Observed Pseudo-F      : {obs_f:.4f}")
+    print(f"Permutational p-value  : {p_permanova:.4f}" + (
+        " (Significant p < 0.05)" if p_permanova < 0.05 else " (Not Significant)"))
+    print("=" * 80 + "\n")
+    return df
+
+
+def plot_multivariate_joystick(df):
+    """
+    Plots the 2D distribution of Joystick Variances (X vs Y) across difficulties.
+    Shows individual data points, density contours, and the trajectory of centroids.
+    """
+    if df is None or df.empty:
+        print("No data available to plot.")
+        return
+
+    # تنظیمات گرافیکی
+    sns.set_theme(style="whitegrid", context="paper", font_scale=1.2)
+    plt.figure(figsize=(10, 8))
+
+    difficulty_order = ['Easy', 'Medium', 'Hard']
+    colors = {'Easy': '#2ca02c', 'Medium': '#ff7f0e', 'Hard': '#d62728'}
+
+    # 1. رسم نقاط پراکندگی (داده‌های تک تک افراد)
+    sns.scatterplot(
+        data=df,
+        x='Var_X',
+        y='Var_Y',
+        hue='Difficulty',
+        hue_order=difficulty_order,
+        palette=colors,
+        alpha=0.6,
+        s=80,
+        edgecolor='k',
+        zorder=3
+    )
+
+    # 2. رسم هاله چگالی (Density Contours) برای نشان دادن پراکندگی هر سطح
+    sns.kdeplot(
+        data=df,
+        x='Var_X',
+        y='Var_Y',
+        hue='Difficulty',
+        hue_order=difficulty_order,
+        palette=colors,
+        levels=3,
+        alpha=0.4,
+        linewidths=1.5,
+        zorder=2
+    )
+
+    # 3. محاسبه و رسم مراکز ثقل (میانگین دو بعدی) و مسیر تغییرات
+    centroids_x = []
+    centroids_y = []
+
+    for diff in difficulty_order:
+        subset = df[df['Difficulty'] == diff]
+        mean_x = subset['Var_X'].mean()
+        mean_y = subset['Var_Y'].mean()
+
+        centroids_x.append(mean_x)
+        centroids_y.append(mean_y)
+
+        # علامت‌گذاری مرکز ثقل با یک ضربدر بزرگ
+        plt.scatter(mean_x, mean_y, marker='X', s=250, color=colors[diff],
+                    edgecolor='black', linewidths=2, zorder=5)
+
+        # اضافه کردن متن راهنما برای مرکز ثقل
+        plt.text(mean_x, mean_y + (df['Var_Y'].max() * 0.02), f'{diff} Mean',
+                 ha='center', va='bottom', fontsize=10, fontweight='bold')
+
+    # 4. رسم فلش برای نشان دادن مسیر تغییرات از Easy به Medium و Hard
+    for i in range(len(centroids_x) - 1):
+        plt.annotate(
+            '',
+            xy=(centroids_x[i + 1], centroids_y[i + 1]),
+            xytext=(centroids_x[i], centroids_y[i]),
+            arrowprops=dict(facecolor='black', width=2, headwidth=10, alpha=0.5, shrink=0.05),
+            zorder=4
+        )
+
+    # تنظیمات نهایی ظاهر نمودار
+    plt.title('Multivariate Shift in Joystick Variance (X vs Y)', fontweight='bold', fontsize=15, pad=15)
+    plt.xlabel('Variance of X-Axis (Horizontal Movement)', fontweight='bold')
+    plt.ylabel('Variance of Y-Axis (Vertical Movement)', fontweight='bold')
+
+    # تنظیم محدوده محورها از صفر برای درک بهتر مقیاس
+    plt.xlim(left=0)
+    plt.ylim(bottom=0)
+
+    # تنظیم راهنمای نمودار
+    handles, labels = plt.gca().get_legend_handles_labels()
+    # فیلتر کردن راهنما برای حذف موارد تکراری ناشی از kdeplot
+    by_label = dict(zip(labels, handles))
+    plt.legend(by_label.values(), by_label.keys(), title='Difficulty', loc='upper right', framealpha=0.9)
+
+    plt.tight_layout()
+    plt.show()
+
+
+
+
+
+
+
+
+
+
+
+def plot_modality_accuracy(
+    perception_results_all,
+    modality_column="Modality",
+    figsize=(16, 7)
+):
+    """
+    Plot accuracy and polar accuracy (%) across difficulty levels.
+
+    Modalities:
+        Visual, Auditory, Haptic, Total
+
+    Valid trials:
+        Exclude trials where perceived angle or distance is
+        -1 or 0.
+
+    Accuracy:
+        Exact match of actual and perceived angle AND distance.
+
+    Polar accuracy:
+        Geometric accuracy in polar coordinates, expressed
+        as a percentage.
+
+    Statistics:
+        Paired two-sided Wilcoxon signed-rank tests between
+        Easy vs Medium, Medium vs Hard, and Easy vs Hard.
+
+    Total:
+        Calculated by pooling all valid trials across
+        Visual, Auditory, and Haptic for each participant
+        and difficulty.
+
+    Returns:
+        results_df, pvalues_df, fig, axes
+    """
+
+    import numpy as np
+    import pandas as pd
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    from scipy.stats import wilcoxon
+
+    # ------------------------------------------------------
+    # Settings
+    # ------------------------------------------------------
+
+    difficulty_order = ["easy", "medium", "hard"]
+
+    modality_order = [
+        "Visual",
+        "Auditory",
+        "Haptic",
+        "Total"
+    ]
+
+    original_modalities = [
+        "Visual",
+        "Auditory",
+        "Haptic"
+    ]
+
+    comparisons = [
+        ("easy", "medium"),
+        ("medium", "hard"),
+        ("easy", "hard")
+    ]
+
+    required_columns = {
+        "Difficulty level",
+        modality_column,
+        "Angle",
+        "Distance",
+        "Perceived angle",
+        "Perceived distance"
+    }
+
+    results_list = []
+
+    # ------------------------------------------------------
+    # Prepare all participant data
+    # ------------------------------------------------------
+
+    for subject_id, trials_df in perception_results_all.items():
+
+        missing = required_columns - set(trials_df.columns)
+
+        if missing:
+            raise ValueError(
+                f"Participant {subject_id} is missing columns: "
+                f"{sorted(missing)}"
+            )
+
+        df = trials_df.copy()
+
+        # Standardize modality and difficulty labels
+        df["_Modality"] = (
+            df[modality_column]
+            .astype(str)
+            .str.strip()
+            .str.lower()
+        )
+
+        df["_Difficulty"] = (
+            df["Difficulty level"]
+            .astype(str)
+            .str.strip()
+            .str.lower()
+        )
+
+        numeric_cols = [
+            "Angle",
+            "Distance",
+            "Perceived angle",
+            "Perceived distance"
+        ]
+
+        for col in numeric_cols:
+            df[col] = pd.to_numeric(
+                df[col],
+                errors="coerce"
+            )
+
+        # --------------------------------------------------
+        # Filter valid trials
+        # --------------------------------------------------
+
+        valid_mask = (
+            df["Perceived angle"].notna()
+            & df["Perceived angle"].ne(-1)
+            & df["Perceived angle"].ne(0)
+            & df["Perceived distance"].notna()
+            & df["Perceived distance"].ne(-1)
+            & df["Perceived distance"].ne(0)
+            & df["Angle"].notna()
+            & df["Distance"].notna()
+        )
+
+        valid_df = df.loc[valid_mask].copy()
+
+        # --------------------------------------------------
+        # Calculate each modality and Total
+        # --------------------------------------------------
+
+        for difficulty in difficulty_order:
+
+            difficulty_df = valid_df.loc[
+                valid_df["_Difficulty"] == difficulty
+            ]
+
+            for modality in modality_order:
+
+                if modality == "Total":
+
+                    # Pool all modalities together
+                    subset = difficulty_df.loc[
+                        difficulty_df["_Modality"].isin(
+                            [
+                                m.lower()
+                                for m in original_modalities
+                            ]
+                        )
+                    ].copy()
+
+                else:
+
+                    subset = difficulty_df.loc[
+                        difficulty_df["_Modality"]
+                        == modality.lower()
+                    ].copy()
+
+                n_valid = len(subset)
+
+                if n_valid > 0:
+
+                    actual_angle = subset["Angle"]
+                    actual_distance = subset["Distance"]
+
+                    perceived_angle = subset[
+                        "Perceived angle"
+                    ]
+
+                    perceived_distance = subset[
+                        "Perceived distance"
+                    ]
+
+                    # --------------------------------------
+                    # Exact-match accuracy
+                    # --------------------------------------
+
+                    correct_mask = (
+                        actual_angle.eq(perceived_angle)
+                        & actual_distance.eq(perceived_distance)
+                    )
+
+                    accuracy = correct_mask.mean() * 100
+
+                    # --------------------------------------
+                    # Polar accuracy
+                    # --------------------------------------
+
+                    theta_true = (
+                        actual_angle * (np.pi / 4)
+                    )
+
+                    theta_perceived = (
+                        perceived_angle * (np.pi / 4)
+                    )
+
+                    r_true = actual_distance
+                    r_perceived = perceived_distance
+
+                    squared_error = (
+                        r_true**2
+                        + r_perceived**2
+                        - 2 * r_true * r_perceived
+                        * np.cos(
+                            theta_true - theta_perceived
+                        )
+                    )
+
+                    geometric_error = np.sqrt(
+                        np.maximum(squared_error, 0)
+                    )
+
+                    r_max = max(
+                        r_true.max(),
+                        r_perceived.max()
+                    )
+
+                    if pd.isna(r_max) or r_max <= 0:
+
+                        polar_accuracy = np.nan
+
+                    else:
+
+                        polar_accuracy_values = (
+                            1 - geometric_error / (2 * r_max)
+                        ) * 100
+
+                        polar_accuracy = (
+                            polar_accuracy_values
+                            .clip(0, 100)
+                            .mean()
+                        )
+
+                else:
+
+                    accuracy = np.nan
+                    polar_accuracy = np.nan
+
+                results_list.append({
+                    "Subject": subject_id,
+                    "Modality": modality,
+                    "Difficulty": difficulty,
+                    "Accuracy": accuracy,
+                    "Polar Accuracy": polar_accuracy,
+                    "N Valid": n_valid
+                })
+
+    results_df = pd.DataFrame(results_list)
+
+    # ======================================================
+    # Paired Wilcoxon tests
+    # ======================================================
+
+    pvalues_list = []
+
+    for modality in modality_order:
+
+        modality_df = results_df.loc[
+            results_df["Modality"] == modality
+        ]
+
+        for metric in [
+            "Accuracy",
+            "Polar Accuracy"
+        ]:
+
+            pivot = modality_df.pivot(
+                index="Subject",
+                columns="Difficulty",
+                values=metric
+            )
+
+            for diff1, diff2 in comparisons:
+
+                paired = pivot[
+                    [diff1, diff2]
+                ].dropna()
+
+                n_pairs = len(paired)
+
+                if n_pairs == 0:
+
+                    p_val = np.nan
+
+                elif np.allclose(
+                    paired[diff1].values,
+                    paired[diff2].values
+                ):
+
+                    p_val = 1.0
+
+                else:
+
+                    try:
+                        _, p_val = wilcoxon(
+                            paired[diff1],
+                            paired[diff2],
+                            alternative="two-sided"
+                        )
+                    except ValueError:
+                        p_val = np.nan
+
+                pvalues_list.append({
+                    "Modality": modality,
+                    "Metric": metric,
+                    "Comparison": (
+                        f"{diff1.capitalize()} vs "
+                        f"{diff2.capitalize()}"
+                    ),
+                    "N": n_pairs,
+                    "p-value": p_val
+                })
+
+    pvalues_df = pd.DataFrame(pvalues_list)
+
+    # ======================================================
+    # Print results
+    # ======================================================
+
+    print("\nMean Accuracy (%)")
+
+    print(
+        results_df.pivot_table(
+            index="Modality",
+            columns="Difficulty",
+            values="Accuracy",
+            aggfunc="mean"
+        ).reindex(modality_order).round(2)
+    )
+
+    print("\nMean Polar Accuracy (%)")
+
+    print(
+        results_df.pivot_table(
+            index="Modality",
+            columns="Difficulty",
+            values="Polar Accuracy",
+            aggfunc="mean"
+        ).reindex(modality_order).round(2)
+    )
+
+    print("\nPaired Wilcoxon p-values")
+
+    print(
+        pvalues_df.to_string(
+            index=False,
+            formatters={
+                "p-value": lambda p: (
+                    "p<0.001"
+                    if pd.notna(p) and p < 0.001
+                    else f"p={p:.3f}"
+                    if pd.notna(p)
+                    else "NaN"
+                )
+            }
+        )
+    )
+
+    # ======================================================
+    # Plot
+    # ======================================================
+
+    fig, axes = plt.subplots(
+        1,
+        2,
+        figsize=figsize,
+        sharex=True
+    )
+
+    metrics = [
+        ("Accuracy", "Accuracy (%)"),
+        ("Polar Accuracy", "Polar Accuracy (%)")
+    ]
+
+    palette = {
+        "Visual": "tab:blue",
+        "Auditory": "tab:orange",
+        "Haptic": "tab:green",
+        "Total": "tab:red"
+    }
+
+    markers = {
+        "Visual": "o",
+        "Auditory": "s",
+        "Haptic": "^",
+        "Total": "D"
+    }
+
+    for ax, (metric, ylabel) in zip(axes, metrics):
+
+        sns.pointplot(
+            data=results_df,
+            x="Difficulty",
+            y=metric,
+            hue="Modality",
+            hue_order=modality_order,
+            order=difficulty_order,
+            palette=palette,
+            markers=[
+                markers[m]
+                for m in modality_order
+            ],
+            linestyles="-",
+            errorbar=("ci", 95),
+            capsize=0.06,
+            dodge=0.3,
+            ax=ax
+        )
+
+        ax.set_title(metric, fontsize=13)
+        ax.set_xlabel("Difficulty")
+        ax.set_ylabel(ylabel)
+        ax.set_ylim(0, 115)
+        ax.grid(True, alpha=0.3)
+
+        # ----------------------------------------------
+        # P-value annotations
+        # ----------------------------------------------
+
+        # Put annotations above the plotting area
+        # in a separate text block to avoid overlap.
+        annotation_lines = []
+
+        for modality in modality_order:
+
+            modality_pvals = pvalues_df.loc[
+                (pvalues_df["Modality"] == modality)
+                & (pvalues_df["Metric"] == metric)
+            ]
+
+            for _, row in modality_pvals.iterrows():
+
+                p = row["p-value"]
+
+                if pd.isna(p):
+                    p_text = "p=NA"
+                elif p < 0.001:
+                    p_text = "p<0.001"
+                else:
+                    p_text = f"p={p:.3f}"
+
+                annotation_lines.append(
+                    f"{modality} | "
+                    f"{row['Comparison']}: {p_text}"
+                )
+
+        ax.text(
+            0.5,
+            1.02,
+            "\n".join(annotation_lines),
+            transform=ax.transAxes,
+            ha="center",
+            va="bottom",
+            fontsize=7.5,
+            clip_on=False,
+            bbox=dict(
+                boxstyle="round,pad=0.3",
+                facecolor="white",
+                edgecolor="gray",
+                alpha=0.9
+            )
+        )
+
+        ax.legend(
+            title="Modality",
+            loc="lower left"
+        )
+
+    fig.tight_layout()
+
+    plt.show()
+
+    return results_df, pvalues_df, fig, axes
+
+
+
+
+
+
+
+
+
+
+
+
 
 

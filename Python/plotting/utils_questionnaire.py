@@ -956,8 +956,162 @@ def plot_unified_performance_correlations(perception_results_all, experiment_log
     axes[1].set_xlim(0.5, 5.5)
     axes[1].set_ylim(bottom=-1)
     axes[1].grid(alpha=0.3, linestyle="--")
-
+    for ax in axes:
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.spines["left"].set_color("black")
+        ax.spines["bottom"].set_color("black")
     # Finalize
+    fig.tight_layout()
+    fig.savefig('metacognition.svg', format='svg', bbox_inches='tight')
+    plt.show()
+
+    corr_df = pd.DataFrame(correlation_records)
+    print("\nSpearman Correlation Results:")
+    print(corr_df.round(3).to_string(index=False))
+
+
+
+
+def plot_unified_performance_correlations_new(perception_results_all, experiment_logs_all, df_questionnaire_final, color_palette):
+    """
+    Creates a 1x2 unified subplot figure:
+    Subplot 1: Q10, Q11, Q12, & Q4 ratings vs. Modality/Total Accuracies using bubble circles.
+    Subplot 2: Q5 rating vs. Final number of collisions using bubble circles.
+    """
+
+    palette = color_palette.copy()
+    palette.update({'total': '#2205d1', 'collision': '#8a754d'})
+
+    accuracy_groups = [
+        ("auditory", "Q10", "Auditory accuracy"),
+        ("visual", "Q11", "Visual accuracy"),
+        ("haptic", "Q12", "Haptic accuracy"),
+        ("total", "Q4", "Total accuracy")
+    ]
+
+    x_offsets = {"auditory": -0.22, "visual": -0.07, "haptic": 0.07, "total": 0.22}
+    participant_names = list(perception_results_all.keys())
+    questionnaire = df_questionnaire_final.reset_index(drop=True).copy()
+    numeric_columns = ["Angle", "Perceived angle", "Distance", "Perceived distance"]
+    participant_records = []
+
+    for idx, p_name in enumerate(participant_names):
+        trials = perception_results_all[p_name].copy()
+        exp_logs = experiment_logs_all[p_name].copy()
+
+        trials["Modality"] = trials["Modality"].astype(str).str.strip().str.lower()
+        for col in numeric_columns:
+            trials[col] = pd.to_numeric(trials[col], errors="coerce")
+
+        valid_trials = trials[trials["Perceived angle"].notna() & (trials["Perceived angle"] != -1)].copy()
+
+        def calc_acc(df):
+            if len(df) == 0: return np.nan
+            hits = (df["Angle"] == df["Perceived angle"]) & (df["Distance"] == df["Perceived distance"])
+            return (hits.sum() / len(df)) * 100
+
+        acc_aud = calc_acc(valid_trials[valid_trials["Modality"] == "auditory"])
+        acc_vis = calc_acc(valid_trials[valid_trials["Modality"] == "visual"])
+        acc_hap = calc_acc(valid_trials[valid_trials["Modality"] == "haptic"])
+        acc_tot = calc_acc(valid_trials)
+
+        col_vals = pd.to_numeric(exp_logs["Number of collision"], errors="coerce").dropna()
+        final_col = col_vals.iloc[-1] if not col_vals.empty else np.nan
+
+        pid = questionnaire.loc[idx, "Participant ID"]
+        q_vals = {q: pd.to_numeric(pd.Series([questionnaire.loc[idx, q]]), errors="coerce").iloc[0] for q in ["Q4", "Q5", "Q10", "Q11", "Q12"]}
+
+        participant_records.append({
+            "Participant ID": pid,
+            "Auditory accuracy": acc_aud, "visual_q": q_vals["Q11"],
+            "Visual accuracy": acc_vis, "auditory_q": q_vals["Q10"],
+            "Haptic accuracy": acc_hap, "haptic_q": q_vals["Q12"],
+            "Total accuracy": acc_tot, "total_q": q_vals["Q4"],
+            "Final collisions": final_col, "collision_q": q_vals["Q5"],
+            "Q4": q_vals["Q4"], "Q5": q_vals["Q5"], "Q10": q_vals["Q10"], "Q11": q_vals["Q11"], "Q12": q_vals["Q12"]
+        })
+
+    results_df = pd.DataFrame(participant_records)
+    fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+    correlation_records = []
+    radius_scale = 4.5
+
+    # ==========================================
+    # Subplot 1: Ratings vs Accuracies as bubbles
+    # ==========================================
+    for name, q_col, acc_col in accuracy_groups:
+        data = results_df[[q_col, acc_col]].dropna()
+        x = data[q_col].to_numpy(dtype=float)
+        y = data[acc_col].to_numpy(dtype=float)
+
+        if len(data) >= 3 and len(np.unique(x)) > 1:
+            corr, p_val = spearmanr(x, y)
+        else:
+            corr, p_val = np.nan, np.nan
+
+        correlation_records.append({"Relationship": f"{q_col} vs {acc_col}", "N": len(data), "Spearman r": corr, "p-value": p_val})
+
+        bubble_df = data.groupby(q_col, as_index=False).agg(mean_y=(acc_col, "mean"), count=(acc_col, "size"))
+        bubble_x = bubble_df[q_col].to_numpy(dtype=float) + x_offsets[name]
+        bubble_y = bubble_df["mean_y"].to_numpy(dtype=float)
+        bubble_s = (radius_scale * bubble_df["count"].to_numpy(dtype=float)) ** 2
+
+        label_str = f"{name.capitalize()} (ρ={corr:.2f}, p={p_val:.3f})" if not np.isnan(corr) else f"{name.capitalize()}"
+
+        axes[0].scatter(bubble_x, bubble_y, s=bubble_s, color=palette[name], edgecolor="black", linewidth=0.6, alpha=0.75, label=label_str)
+
+        if len(np.unique(x)) > 1:
+            slope, intercept = np.polyfit(x, y, 1)
+            line_x = np.linspace(1, 5, 100)
+            axes[0].plot(line_x, slope * line_x + intercept, color=palette[name], linewidth=2.5)
+
+    axes[0].set_title("Perceived Clarity/Success vs. Accuracy", fontsize=14, fontweight="bold")
+    axes[0].set_xlabel("Questionnaire Rating (1-5)", fontsize=12)
+    axes[0].set_ylabel("Accuracy (%)", fontsize=12)
+    axes[0].set_xticks([1, 2, 3, 4, 5])
+    axes[0].set_xlim(0.5, 5.5)
+    axes[0].set_ylim(-5, 105)
+    axes[0].grid(alpha=0.3, linestyle="--")
+    axes[0].legend(title="Metric (Spearman ρ)", fontsize=9, loc="lower right", framealpha=0.9)
+
+    # ==========================================
+    # Subplot 2: Q5 vs Collisions as bubbles
+    # ==========================================
+    col_data = results_df[["Q5", "Final collisions"]].dropna()
+    x_col = col_data["Q5"].to_numpy(dtype=float)
+    y_col = col_data["Final collisions"].to_numpy(dtype=float)
+
+    if len(col_data) >= 3 and len(np.unique(x_col)) > 1:
+        corr_col, p_val_col = spearmanr(x_col, y_col)
+    else:
+        corr_col, p_val_col = np.nan, np.nan
+
+    correlation_records.append({"Relationship": "Q5 vs Final collisions", "N": len(col_data), "Spearman r": corr_col, "p-value": p_val_col})
+
+    bubble_col_df = col_data.groupby("Q5", as_index=False).agg(mean_y=("Final collisions", "mean"), count=("Final collisions", "size"))
+    bubble_x_col = bubble_col_df["Q5"].to_numpy(dtype=float)
+    bubble_y_col = bubble_col_df["mean_y"].to_numpy(dtype=float)
+    bubble_s_col = (radius_scale * bubble_col_df["count"].to_numpy(dtype=float)) ** 2
+
+    axes[1].scatter(bubble_x_col, bubble_y_col, s=bubble_s_col, color=palette["collision"], edgecolor="black", linewidth=0.6, alpha=0.85)
+
+    if len(np.unique(x_col)) > 1:
+        slope_c, intercept_c = np.polyfit(x_col, y_col, 1)
+        line_x_c = np.linspace(x_col.min(), x_col.max(), 100)
+        axes[1].plot(line_x_c, slope_c * line_x_c + intercept_c, color=palette["collision"], linewidth=2.5)
+
+    col_text = f"N = {len(col_data)}\nSpearman ρ = {corr_col:.3f}\np = {p_val_col:.3f}" if not np.isnan(corr_col) else "undefined"
+    axes[1].text(0.04, 0.96, col_text, transform=axes[1].transAxes, ha="left", va="top", fontsize=11, bbox={"facecolor": "white", "edgecolor": "gray", "alpha": 0.8})
+
+    axes[1].set_title("Perceived Obstacle-Avoidance vs. Collisions", fontsize=14, fontweight="bold")
+    axes[1].set_xlabel("Q5 Rating (1-5)", fontsize=12)
+    axes[1].set_ylabel("Final Number of Collisions", fontsize=12)
+    axes[1].set_xticks([1, 2, 3, 4, 5])
+    axes[1].set_xlim(0.5, 5.5)
+    axes[1].set_ylim(bottom=-1)
+    axes[1].grid(alpha=0.3, linestyle="--")
+
     fig.tight_layout()
     fig.savefig('metacognition.pdf', format='pdf', bbox_inches='tight')
     plt.show()
@@ -965,6 +1119,8 @@ def plot_unified_performance_correlations(perception_results_all, experiment_log
     corr_df = pd.DataFrame(correlation_records)
     print("\nSpearman Correlation Results:")
     print(corr_df.round(3).to_string(index=False))
+
+
 
 
 def plot_metacognitive_awareness_stacked(perception_results_all, experiment_logs_all, df_questionnaire_final):
