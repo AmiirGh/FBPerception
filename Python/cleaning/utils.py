@@ -309,5 +309,23 @@ def add_setup_misses(df_trials, subject_setup_misses):
     return df_trials
 
 
+def calculate_speech_recognition_stats(s2t):
+    # Calculate the differences and convert from milliseconds to seconds (divide by 1000)
+    start_diff = (s2t['Response start (manual checking)'] - s2t['Response start (json)']) / 1000.0
+    end_diff = (s2t['Response end (manual checking)'] - s2t['Response end (json)']) / 1000.0
 
+    # Calculate mean and variance
+    start_mean = start_diff.mean()
+    start_var = start_diff.std()
 
+    end_mean = end_diff.mean()
+    end_var = end_diff.std()
+
+    # Print the results
+    print("--- Response Start Statistics (Seconds) ---")
+    print(f"Mean: {start_mean:.4f} s")
+    print(f"Variance: {start_var:.4f} s²\n")
+
+    print("--- Response End Statistics (Seconds) ---")
+    print(f"Mean: {end_mean:.4f} s")
+    print(f"Variance: {end_var:.4f} s²")

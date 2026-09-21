@@ -1,5 +1,7 @@
+using System.Diagnostics;
 using UnityEngine;
-
+using System.Diagnostics;
+using Debug = UnityEngine.Debug;
 public class Feedbacks : MonoBehaviour
 {
     [SerializeField] DynamicObstacleSpawner dynamicObstacleSpawner;
@@ -15,10 +17,18 @@ public class Feedbacks : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
+        float currentFPS = 1.0f / Time.deltaTime;
+
         if (IsNewTrialStarted())
         {
+            Stopwatch stopwatch = Stopwatch.StartNew();
+            Debug.Log($"Update frequency: {currentFPS:F1} FPS");
+
+
+
             //int fbModality = UnityEngine.Random.Range((int)FbModality.visual, (int)FbModality.haptic+1); // V: 1, A: 2, H:3   So this random generates a feeddback between audio and haptic
             int fbModality = GetFeedbackModality();
+            fbModality = 3;
             if (dynamicObstacleSpawner.isDynamicObstaclePresent)
             {
                 if (fbModality == 1) feedbackModality = "visual";
@@ -27,6 +37,10 @@ public class Feedbacks : MonoBehaviour
                 else feedbackModality = "-";
             }
             else feedbackModality = "-";
+            stopwatch.Stop();
+
+            // 4. Log the execution time
+            Debug.Log($"Logic Execution Time: {stopwatch.Elapsed.TotalMilliseconds} ms");
 
 
             Debug.Log($"feedback modality {feedbackModality}");
