@@ -77,9 +77,9 @@ def get_experiment_logs_df(data_path, participants_to_remove=None):
 
 
 
-def extract_collision_modality(df, trials_df, start_offset=24, end_offset=48):
+def extract_collision_modality(df, trials_df, start_offset=0.5, duration=0.5):
     """
-    Extract collisions in a time window AFTER rising edge,
+    Extract collisions in a time window (in seconds) AFTER rising edge,
     ignoring trials where the subject missed (degree_perceived == 0).
     """
     df = df.copy().reset_index(drop=True)
@@ -115,12 +115,23 @@ def extract_collision_modality(df, trials_df, start_offset=24, end_offset=48):
             # If for some reason the trial isn't in the trials_df, skip it to be safe
             continue
 
-        # --- Proceed with collision calculation if not missed ---
-        start_idx = idx + start_offset
-        end_idx = min(idx + end_offset, len(df) - 1)
+        # --- Proceed with time-based collision calculation ---
+        t_cue = df.loc[idx, "Timestamp"]
+        t_start = t_cue + start_offset
+        t_end = t_start + duration
 
-        if start_idx >= len(df):
-            continue
+        # Find the first row where Timestamp is >= t_start
+        start_mask = df["Timestamp"] >= t_start
+        if not start_mask.any():
+            continue  # The recording ends before the start window is reached
+        start_idx = start_mask.idxmax() # idxmax() returns the first index where the mask is True
+
+        # Find the first row where Timestamp is >= t_end
+        end_mask = df["Timestamp"] >= t_end
+        if not end_mask.any():
+            end_idx = df.index[-1] # Use the very last row if the recording cuts off early
+        else:
+            end_idx = end_mask.idxmax()
 
         start_collision = df.loc[start_idx, "Number of collision"]
         end_collision = df.loc[end_idx, "Number of collision"]
@@ -133,7 +144,6 @@ def extract_collision_modality(df, trials_df, start_offset=24, end_offset=48):
         })
 
     return pd.DataFrame(collision_results)
-
 
 
 def is_normal(dist_values):
@@ -907,176 +917,12 @@ def plot_weighted_error_means(error_results):
 
 
 
-def plot_answer_duration(subjects_data_trials, color_palette):
-    all_durations = []
-
-    # Iterate through the dictionary
-    for subject_name, df in subjects_data_trials.items():
-        if df is None or df.empty:
-            continue
-
-        df = df.copy()
-
-        # Capture the original row index as the trial number (1-based index)
-        # If your data already has a specific 'trial' column, you can replace this line with df['trial']
-        df['Trial number'] = df.index + 1
-
-        # Filter out missed/invalid trials where voice_start is 0
-        df = df[df['Response start'] != 0]
-
-        if df.empty:
-            continue
-
-        # Calculate the duration of the answer
-        df['Answer duration'] = df['Response end'] - df['Response start']
-        df['Participant ID'] = subject_name
-
-        # Keep the new trial_number column when appending
-        all_durations.append(df[['Participant ID', 'Trial number', 'Modality', 'Answer duration']])
-
-    # Safety check
-    if not all_durations:
-        print("No valid duration data found after filtering.")
-        return
-
-    # Combine everything into a single DataFrame
-    combined_df = pd.concat(all_durations, ignore_index=True)
-
-    # =========================================================
-    # --- Print trials taking longer than 5 seconds ---
-    # =========================================================
-    long_answers = combined_df[combined_df['Answer duration'] > 9]
-
-    if not long_answers.empty:
-        print(f"\n--- Alert: Found {len(long_answers)} trial(s) exceeding 5 seconds ---")
-        for _, row in long_answers.iterrows():
-            # Added Trial Number to the print statement
-            print(
-                f"Subject: {row['Participant ID']:<12} | Trial: {row['Trial number']:<4} | Modality: {row['Modality']:<8} | Duration: {row['Answer duration']:.2f}s")
-        print("-" * 75 + "\n")
-
-    # =========================================================
-    # --- Plotting ---
-    # =========================================================
-    sns.set_theme(style="whitegrid")
-    modality_order = ['auditory', 'haptic', 'visual']
-
-    fig, ax = plt.subplots(figsize=(5, 5))
-
-    # Boxplot using the shared modality color palette
-    sns.boxplot(
-        data=combined_df,
-        x='Modality',
-        y='Answer duration',
-        order=modality_order,
-        palette=color_palette,
-        ax=ax,
-        showfliers=False
-    )
-
-    # Labels and Formatting
-    ax.set_xlabel("Feedback Modality")
-    ax.set_ylabel("Answer Duration (Seconds)")
-    ax.set_title("Distribution of Answer Durations by Modality", fontsize=14, pad=15)
-
-    plt.tight_layout()
-    plt.show()
 
 
 
 
 
-def plot_overall_timing_metrics(subjects_data_trials):
-    all_metrics = []
 
-    for subject_name, df in subjects_data_trials.items():
-        if df is None or df.empty:
-            continue
-
-        df = df.copy()
-        if subject_name == '10':
-            pass
-
-        # Filter out missed/invalid trials where Response start is 0
-        df = df[df['Response start'] != 0]
-
-
-        # Calculate the metrics
-        df['Answer duration'] = df['Response end'] - df['Response start']
-        df['Reaction time'] = df['Response start'] - df['Phase timestamp']
-        df['Participant ID'] = subject_name
-
-        # Keep only the necessary columns for combining
-        all_metrics.append(df[['Participant ID', 'Trial number', 'Answer duration', 'Reaction time']])
-
-
-    # Combine everything into a single DataFrame
-    combined_df = pd.concat(all_metrics, ignore_index=True)
-
-    # =========================================================
-    # --- Print Alerts for Long Times ---
-    # =========================================================
-    long_durations = combined_df[combined_df['Answer duration'] > 8]
-    if not long_durations.empty:
-        print(f"\n--- Alert: Found {len(long_durations)} trial(s) exceeding 9s Answer Duration ---")
-        for _, row in long_durations.iterrows():
-            print(
-                f"Subject: {row['Participant ID']:<12} | Trial: {row['Trial number']:<4} | Duration: {row['Answer duration']:.2f}s")
-
-    long_reactions = combined_df[combined_df['Reaction time'] > 7.8]
-    if not long_reactions.empty:
-        print(f"\n--- Alert: Found {len(long_reactions)} trial(s) exceeding 6s Reaction Time ---")
-        for _, row in long_reactions.iterrows():
-            print(
-                f"Subject: {row['Participant ID']:<12} | Trial: {row['Trial number']:<4} | Reaction Time: {row['Reaction time']:.2f}s")
-
-    print("-" * 75 + "\n")
-
-    # =========================================================
-    # --- Plotting ---
-    # =========================================================
-    # We melt the DataFrame so we can plot both metrics side-by-side easily
-    melted_df = combined_df.melt(
-        id_vars=['Participant ID', 'Trial number'],
-        value_vars=['Reaction time', 'Answer duration'],
-        var_name='Metric',
-        value_name='Time (Seconds)'
-    )
-
-    sns.set_theme(style="whitegrid")
-    fig, ax = plt.subplots(figsize=(8, 6))
-
-    # 1. Base Boxplot
-    sns.boxplot(
-        data=melted_df,
-        x='Metric',
-        y='Time (Seconds)',
-        palette="Set2",
-        ax=ax,
-        showfliers=False,  # Hide outliers in boxplot so they don't overlap with the scatter points
-        width=0.4
-    )
-
-    # 2. Scatter / Stripplot overlaid on top
-    sns.stripplot(
-        data=melted_df,
-        x='Metric',
-        y='Time (Seconds)',
-        color="black",
-        alpha=0.3,  # Transparency so overlapping points are visible
-        jitter=True,  # Spreads the dots horizontally so they don't form a single thick line
-        size=4,
-        ax=ax
-    )
-
-    # Labels and Formatting
-    ax.set_xlabel("Timing Metric", fontsize=12, labelpad=10)
-    ax.set_ylabel("Time (Seconds)", fontsize=12, labelpad=10)
-    ax.set_title("Overall Reaction Time vs. Answer Duration", fontsize=14, pad=15)
-
-    plt.tight_layout()
-    # plt.savefig('timing_metrics_combined.pdf', format='pdf', bbox_inches='tight')
-    plt.show()
 
 
 def get_duration_p_value(subjects_data_trials):
@@ -1105,91 +951,8 @@ def get_duration_p_value(subjects_data_trials):
     return p_val
 
 
-def plot_reaction_time(subjects_data_trials, color_palette):
-    all_reaction_times = []
 
-    # Iterate through the dictionary
-    for subject_name, df in subjects_data_trials.items():
-        if df is None or df.empty:
-            continue
 
-        df = df.copy()
-
-        # Capture the original row index as the trial number (1-based index)
-        df['Trial number'] = df.index + 1
-
-        # Filter out missed/invalid trials where voice_start is 0
-        df = df[df['Response start'] != 0]
-
-        if df.empty:
-            continue
-
-        # Calculate Reaction Time: Voice Start minus Cue Presentation (Relative Timestamp)
-        df['reaction_time'] = df['Response start'] - df['Phase timestamp']
-
-        df['subject_id'] = subject_name
-
-        # Keep the necessary columns
-        all_reaction_times.append(df[['subject_id', 'Trial number', 'Modality', 'reaction_time']])
-
-    # Safety check
-    if not all_reaction_times:
-        print("No valid reaction time data found after filtering.")
-        return
-
-    # Combine everything into a single DataFrame
-    combined_df = pd.concat(all_reaction_times, ignore_index=True)
-
-    # =========================================================
-    # --- Print trials with unusually long reaction times ---
-    # =========================================================
-    # You can adjust this 5-second threshold depending on what
-    # is considered "normal" for your specific experimental cue
-    long_reactions = combined_df[combined_df['reaction_time'] > 9.0]
-
-    if not long_reactions.empty:
-        print(f"\n--- Alert: Found {len(long_reactions)} trial(s) with reaction time > 5 seconds ---")
-        for _, row in long_reactions.iterrows():
-            print(
-                f"Subject: {row['subject_id']:<12} | Trial: {row['Trial number']:<4} | Modality: {row['Modality']:<8} | Reaction Time: {row['reaction_time']:.2f}s")
-        print("-" * 75 + "\n")
-
-    early = combined_df[combined_df['reaction_time'] < 0]
-
-    if not early.empty:
-        print(f"\n--- Alert: Found {len(early)} auditory trial(s) with reaction time < -2.3 seconds ---")
-        for _, row in early.iterrows():
-            print(
-                f"Subject: {row['subject_id']:<12} | Trial: {row['Trial number']:<4} | Reaction Time: {row['reaction_time']:.2f}s")
-        print("-" * 75 + "\n")
-    # =========================================================
-    # --- Plotting ---
-    # =========================================================
-    sns.set_theme(style="whitegrid")
-    modality_order = ['auditory', 'haptic', 'visual']
-
-    fig, ax = plt.subplots(figsize=(5, 5))
-
-    # Boxplot using the shared modality color palette (no scattered data points per your request)
-    sns.boxplot(
-        data=combined_df,
-        x='Modality',
-        y='reaction_time',
-        order=modality_order,
-        palette=color_palette,
-        ax=ax,
-        showfliers=False
-    )
-
-    # Labels and Formatting
-    ax.set_xlabel("Feedback Modality")
-
-    # Assuming your timestamps are in seconds. Change to milliseconds if needed.
-    ax.set_ylabel("Reaction Time (Seconds)")
-    ax.set_title("Distribution of Reaction Times by Modality", fontsize=14, pad=15)
-
-    plt.tight_layout()
-    plt.show()
 
 
 def get_reaction_time_p_value(subjects_data_trials):
@@ -1232,162 +995,8 @@ def get_reaction_time_p_value(subjects_data_trials):
 
 
 
-def plot_error_collision_tradeoff(perception_results_all, experiment_logs_all):
-    stats_list = []
-
-    for subject_name, perc_df in perception_results_all.items():
-        # Get corresponding log dataframe for the collisions
-        log_df = experiment_logs_all.get(subject_name)
-
-        # Skip if either dataframe is missing or empty
-        if perc_df is None or perc_df.empty or log_df is None or log_df.empty:
-            continue
-
-        # =========================================================
-        # 1. Calculate Total Errors (from perception_results_all)
-        # =========================================================
-        # Filter out trials where perceived values are -1 or 0
-        df_filtered = perc_df[(perc_df['Perceived angle'] != -1) & (perc_df['Perceived angle'] != 0)]
-
-        # Handle potential typo in the column name from the original code
-        dist_col = 'Distance' if 'Distance' in df_filtered.columns else 'Distnce'
-
-        # Count total errors (where actual angle/distance does not match perceived angle/distance)
-        total_errors = ((df_filtered['Angle'] != df_filtered['Perceived angle']) |
-                        (df_filtered[dist_col] != df_filtered['Perceived distance'])).sum()
-
-        # =========================================================
-        # 2. Calculate Total Collisions (from experiment_logs_all)
-        # =========================================================
-        if 'Number of collision' not in log_df.columns:
-            continue
-
-        # Ensure it's numeric before doing math
-        log_df_copy = log_df.copy()
-        log_df_copy['Number of collision'] = pd.to_numeric(log_df_copy['Number of collision'], errors='coerce')
-
-        # Subtract min from max to get the true total accumulated over the entire experiment
-        total_collisions = log_df_copy['Number of collision'].max() - log_df_copy['Number of collision'].min()
-
-        # Handle potential NaNs if the log data was invalid
-        if pd.isna(total_collisions):
-            continue
-
-        # =========================================================
-        # 3. Store Metrics
-        # =========================================================
-        stats_list.append({
-            'Subject': subject_name,
-            'Total Errors': total_errors,
-            'Total Collisions': total_collisions
-        })
-
-    # Convert summary to a DataFrame
-    df_summary = pd.DataFrame(stats_list)
-
-    if df_summary.empty:
-        print("No valid subject data available to plot.")
-        return None
-
-    # --- Calculate Pearson correlation ---
-    r, p_value = stats.pearsonr(df_summary['Total Errors'], df_summary['Total Collisions'])
-
-    # 4. Plot the Scatter Plot with a Regression Line
-    plt.figure(figsize=(8, 6))
-
-    ax = sns.regplot(
-        data=df_summary,
-        x='Total Errors',
-        y='Total Collisions',
-        scatter_kws={'s': 60, 'alpha': 0.8, 'color': '#1f77b4'},  # Blue dots
-        line_kws={'color': '#d62728', 'linewidth': 2}  # Red regression line
-    )
-
-    # --- Add the Pearson value to the plot ---
-    stats_text = f'Pearson r = {r:.2f}\np-value = {p_value:.3f}'
-
-    # Place text in the upper left corner of the axes (0.05, 0.95)
-    props = dict(boxstyle='round', facecolor='white', alpha=0.8, edgecolor='gray')
-    ax.text(0.05, 0.95, stats_text, transform=ax.transAxes, fontsize=12,
-            verticalalignment='top', bbox=props, fontweight='bold')
-
-    # 5. Labels and Layout
-    plt.title('Dual-Task Trade-off: Total Perception Errors vs. Total Collisions', fontsize=14, fontweight='bold')
-    plt.xlabel('Total Errors (Angle or Distance Misperceptions)', fontsize=12, fontweight='bold')
-    plt.ylabel('Total Collisions (Over Entire Experiment)', fontsize=12, fontweight='bold')
-    plt.grid(True, linestyle='--', alpha=0.5)
-
-    plt.tight_layout()
-    plt.show()
 
 
-
-
-
-
-def plot_misses_collision_tradeoff(subjects_data_trials, experiment_logs_all):
-    stats_list = []
-
-    for subject_name, df in subjects_data_trials.items():
-        # Skip empty dataframes if any
-        if df is None or df.empty:
-            continue
-
-        # 1. Filter out trials where perceived values are -1 (invalid/should not be counted)
-        df_filtered = df[(df['Perceived angle'] != -1) & (df['Perceived distance'] != -1)]
-
-        # 2. Count ONLY the "misses" (where perceived value is exactly 0)
-        misses = ((df_filtered['Perceived angle'] == 0) |
-                  (df_filtered['Perceived distance'] == 0)).sum()
-
-        # 3. Get the last recorded number of collisions for the subject
-        if subject_name in experiment_logs_all and not experiment_logs_all[subject_name].empty:
-            log_df = experiment_logs_all[subject_name]
-            last_collisions = log_df['Number of collision'].iloc[-1]
-
-        # Append the metrics for this subject
-        stats_list.append({
-            'Subject': subject_name,
-            'Total Misses': misses,
-            'Total Collisions': last_collisions
-        })
-
-    # Convert summary to a DataFrame
-    df_summary = pd.DataFrame(stats_list)
-
-    if df_summary.empty:
-        print("No valid subject data available to plot.")
-        return
-
-    # --- NEW: Calculate Pearson correlation (ignoring p-value) ---
-    r, _ = stats.pearsonr(df_summary['Total Misses'], df_summary['Total Collisions'])
-
-    # 4. Plot the Scatter Plot with a Regression Line
-    plt.figure(figsize=(8, 6))
-
-    ax = sns.regplot(
-        data=df_summary,
-        x='Total Misses',
-        y='Total Collisions',
-        scatter_kws={'s': 60, 'alpha': 0.8, 'color': '#2ca02c'},  # Greenish dots
-        line_kws={'color': '#d62728', 'linewidth': 2}  # Red regression line
-    )
-
-    # --- NEW: Add ONLY the Pearson r value to the plot ---
-    stats_text = f'Pearson r = {r:.2f}'
-
-    props = dict(boxstyle='round', facecolor='white', alpha=0.8, edgecolor='gray')
-    ax.text(0.05, 0.95, stats_text, transform=ax.transAxes, fontsize=12,
-            verticalalignment='top', bbox=props)
-
-    # 5. Labels and Layout
-    plt.title('Dual-Task Trade-off: Perception Misses vs. Total Collisions', fontsize=14)
-    plt.xlabel('Total Misses (Perceived == 0)', fontsize=12)
-    plt.ylabel('Total Collisions (Final Count)', fontsize=12)
-    plt.grid(True, linestyle='--', alpha=0.5)
-
-    plt.tight_layout()
-    plt.show()
 
 
 def plot_unified_tradeoffs(perception_results_all, experiment_logs_all):

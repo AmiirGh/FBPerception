@@ -708,59 +708,9 @@ def test_perceptual_tunneling(perception_results_all, color_palette):
 
 
 
-def test_speed_accuracy_tradeoffs(perception_results_all):
-    """Evaluates speed-accuracy trade-offs for visual, auditory, and haptic cues."""
-    all_trials_list = []
 
-    for subject_id, perc_df in perception_results_all.items():
-        valid_trials = perc_df[
-            (perc_df['Perceived angle'] > 0)
-            & (perc_df['Modality'].isin(['visual', 'auditory', 'haptic']))
-        ].copy()
 
-        valid_trials['Reaction_Delay'] = valid_trials['Response start'] - valid_trials['Phase timestamp']
-        diff = np.abs(valid_trials['Angle'] - valid_trials['Perceived angle'])
-        valid_trials['Angular_Error'] = np.minimum(diff, 8 - diff)
-        valid_trials['Subject_ID'] = subject_id
-        all_trials_list.append(valid_trials)
 
-    df_combined = pd.concat(all_trials_list, ignore_index=True)
-
-    print("--- Speed-Accuracy Correlation (Spearman's Rho) ---")
-    for mod in ['visual', 'auditory', 'haptic']:
-        subset = df_combined[df_combined['Modality'] == mod].dropna(subset=['Reaction_Delay', 'Angular_Error'])
-        rho, p_val = spearmanr(subset['Reaction_Delay'], subset['Angular_Error'])
-        print(f"{mod.capitalize()}: rho = {rho:.3f}, p-value = {p_val:.4f}")
-
-    plot_df = df_combined.copy()
-    plot_df['Modality'] = plot_df['Modality'].str.capitalize()
-
-    sns.set_theme(style="whitegrid", context="paper", font_scale=1.2)
-    modality_palette = {'Visual': '#8cc5e3', 'Auditory': '#b5d1ae', 'Haptic': '#ffbb6f'}
-
-    g = sns.FacetGrid(plot_df, col="Modality", hue="Modality", palette=modality_palette, height=5, aspect=1)
-    g.map(
-        sns.kdeplot,
-        "Reaction_Delay",
-        "Angular_Error",
-        fill=True,
-        thresh=0.05,
-        levels=8,
-        alpha=0.7,
-        clip=((-np.inf, np.inf), (0, 4)),
-    )
-
-    g.set_axis_labels("Reaction Delay (Seconds)\n[Speed]", "Absolute Angular Error\n[Accuracy]")
-    g.set_titles(col_template="{col_name} Modality", fontweight='bold')
-
-    for ax in g.axes.flat:
-        ax.set_yticks([0, 1, 2, 3, 4])
-
-    plt.subplots_adjust(top=0.85)
-    g.figure.suptitle('Speed-Accuracy Density by Sensory Channel', fontsize=16, fontweight='bold')
-    plt.show()
-
-    return df_combined
 
 
 def test_depth_perception_limits(perception_results_all, color_palette):
@@ -839,59 +789,7 @@ def test_depth_perception_limits(perception_results_all, color_palette):
 
 
 
-def analyze_motor_cognitive_interference(perception_results_all, experiment_logs_all):
-    """
-    Analyzes whether high joystick activity (motor effort) correlates with
-    increased reaction delays (cognitive spatial decoding interference).
-    """
-    all_trials_list = []
 
-    for subject_id, perc_df in perception_results_all.items():
-        logs_df = experiment_logs_all.get(subject_id)
-        if logs_df is None: continue
-
-        # Get valid trials only
-        valid_trials = perc_df[perc_df['Perceived angle'] > 0].copy()
-        valid_trials['Reaction_Delay'] = valid_trials['Response start'] - valid_trials['Phase timestamp']
-
-        # Calculate motor effort during the cue window
-        motor_effort = []
-        for _, trial in valid_trials.iterrows():
-            t_start = trial['Timestamp']
-            # Window: cue onset to 2 seconds after (or until response)
-            t_end = t_start + 2.0
-
-            # Slice logs
-            window = logs_df[(logs_df['Timestamp'] >= t_start) & (logs_df['Timestamp'] <= t_end)]
-
-            # Motor Effort = Total Euclidean distance of joystick movement
-            if not window.empty:
-                dx = window['Thumbstick x'].diff().abs().sum()
-                dy = window['Thumbstick y'].diff().abs().sum()
-                motor_effort.append(dx + dy)
-            else:
-                motor_effort.append(0)
-
-        valid_trials['Motor_Effort'] = motor_effort
-        valid_trials['Subject_ID'] = subject_id
-        all_trials_list.append(valid_trials)
-
-    df = pd.concat(all_trials_list, ignore_index=True)
-
-    # Plotting
-    plt.figure(figsize=(10, 6))
-    sns.regplot(data=df, x='Motor_Effort', y='Reaction_Delay',
-                scatter_kws={'alpha': 0.3}, line_kws={'color': 'red'})
-    plt.title("Motor-Cognitive Interference: Joystick Effort vs. Reaction Delay", fontsize=14)
-    plt.xlabel("Total Joystick Movement (Motor Effort)")
-    plt.ylabel("Reaction Delay (s)")
-    plt.show()
-
-    # Correlation
-    corr = df[['Motor_Effort', 'Reaction_Delay']].corr(method='spearman')
-    print(f"Spearman Correlation between Motor Effort and Reaction Delay:\n{corr}")
-
-    return df
 
 
 def analyze_attention_redistribution(
@@ -3817,7 +3715,7 @@ def plot_efficiency_frontier_by_modality(perception_results_all, experiment_logs
 
         acc_by_mod = valid_df.groupby('Modality')['Is_Correct'].mean() * 100
 
-        collision_df = extract_collision_modality(logs_df, dfc, start_offset=24, end_offset=48)
+        collision_df = extract_collision_modality(logs_df, dfc, start_offset=2, duration=2)
         if collision_df.empty:
             continue
 
