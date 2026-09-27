@@ -116,6 +116,7 @@ def plot_timing_metrics_unpaired(perception_results_all, color_palette, axes=Non
         ['Participant ID', 'Modality', 'Difficulty level', 'Response time']]
     print(top_response.to_string(index=False))
     print("=" * 60 + "\n")
+    plt.savefig('modality_timings.svg', format='svg', bbox_inches='tight')
 
     if standalone:
         plt.tight_layout()
@@ -564,148 +565,6 @@ def test_cross_modal_mapping_cost(perception_results_all):
 
 
 
-def test_perceptual_tunneling(perception_results_all, color_palette):
-    """
-    Evaluates non-uniform perceptual tunneling by tracking Miss Rates
-    and Angular Accuracy across changing difficulty levels.
-    """
-    all_trials_list = []
-
-    for subject_id, perc_df in perception_results_all.items():
-        # Filter out hardware faults (-1), keep valid (>0) and missed (0)
-        analysis_trials = perc_df[
-            (perc_df['Perceived angle'] >= 0) &
-            (perc_df['Modality'].isin(['visual', 'auditory', 'haptic']))
-            ].copy()
-
-        # Create a boolean column for Missed Cues
-        analysis_trials['Is_Missed'] = analysis_trials['Perceived angle'] == 0
-
-        # Calculate Circular Angular Error (1 to 8 positions)
-        # We only calculate this for valid responses; missed will be NaN
-        def calc_angular_error(row):
-            if row['Is_Missed']:
-                return np.nan
-
-            diff = abs(row['Angle'] - row['Perceived angle'])
-            # The shortest distance around the 8-position circle
-            return min(diff, 8 - diff)
-
-        analysis_trials['Angular_Error'] = analysis_trials.apply(calc_angular_error, axis=1)
-
-        # Ensure difficulty level names are standardized for grouping
-        analysis_trials['Difficulty level'] = analysis_trials['Difficulty level'].str.lower()
-        analysis_trials['Subject_ID'] = subject_id
-
-        all_trials_list.append(analysis_trials)
-
-    # Combine all processed subject data
-    df_combined = pd.concat(all_trials_list, ignore_index=True)
-
-    # Generate summary statistics grouped by Difficulty Level and Modality
-    summary_stats = df_combined.groupby(['Difficulty level', 'Modality']).agg(
-        Total_Trials=('Is_Missed', 'count'),
-        Miss_Rate_Percent=('Is_Missed', lambda x: (x.mean() * 100).round(2)),
-        Mean_Angular_Error=('Angular_Error', lambda x: x.mean().round(3)),
-        Std_Angular_Error=('Angular_Error', lambda x: x.std().round(3))
-    ).reset_index()
-
-    # Reorder the output so it reads logically: Easy -> Medium -> Hard
-    difficulty_order = {'easy': 1, 'medium': 2, 'hard': 3}
-    summary_stats['Sort_Key'] = summary_stats['Difficulty level'].map(difficulty_order)
-    summary_stats = summary_stats.sort_values(by=['Sort_Key', 'Modality']).drop(columns=['Sort_Key'])
-
-    print("--- Detailed Perceptual Tunneling Statistics ---")
-    print(summary_stats.to_string(index=False))
-
-    # Create a pivot table specifically to see the interaction effect on Miss Rate
-    miss_rate_pivot = summary_stats.pivot(index='Difficulty level', columns='Modality', values='Miss_Rate_Percent')
-    miss_rate_pivot = miss_rate_pivot.reindex(['easy', 'medium', 'hard'])
-
-    print("\n--- Miss Rate Interaction Table (%) ---")
-    print(miss_rate_pivot.to_string())
-    data = {
-        'Difficulty': ['Easy', 'Medium', 'Hard', 'Easy', 'Medium', 'Hard', 'Easy', 'Medium', 'Hard'],
-        'Modality': ['Visual', 'Visual', 'Visual', 'Auditory', 'Auditory', 'Auditory', 'Haptic', 'Haptic', 'Haptic'],
-        'Miss_Rate': [12.18, 14.41, 17.40, 0.70, 0.32, 1.32, 0.16, 0.62, 0.88]
-    }
-    df_plot = pd.DataFrame(data)
-
-    # Set up publication-style formatting
-    sns.set_theme(style="whitegrid", context="paper", font_scale=1.2)
-    plt.figure(figsize=(8, 6))
-
-    # Define distinct colors and markers, using the shared modality palette
-    palette = {mod.capitalize(): color for mod, color in color_palette.items()}
-    markers = {'Visual': 'o', 'Auditory': 's', 'Haptic': '^'}
-
-    # Create the interaction plot
-    ax = sns.pointplot(
-        data=df_plot,
-        x='Difficulty',
-        y='Miss_Rate',
-        hue='Modality',
-        palette=palette,
-        linestyles=['-', '--', '-.'],
-        scale=1.5
-    )
-
-    # Formatting the axes and labels
-    plt.title('Non-Uniform Perceptual Tunneling: Miss Rate by Difficulty', fontsize=14, fontweight='bold', pad=15)
-    plt.xlabel('Phase Difficulty Level', fontsize=12, fontweight='bold')
-    plt.ylabel('Miss Rate (%)', fontsize=12, fontweight='bold')
-
-    # Customize the legend
-    plt.legend(title='Cue Modality', title_fontsize='11', fontsize='10', frameon=True, shadow=True)
-
-    # Set y-axis limits to give the top line some breathing room
-    plt.ylim(-1, 20)
-
-    plt.tight_layout()
-    plt.show()
-
-    subject_rates = df_combined.groupby(['Subject_ID', 'Modality', 'Difficulty level'])['Is_Missed'].mean().reset_index()
-
-    for modality in ['visual', 'auditory', 'haptic']:
-        print(f"\n=========================================")
-        print(f"Modality: {modality.upper()}")
-        print(f"=========================================")
-
-        mod_data = subject_rates[subject_rates['Modality'] == modality]
-        easy = mod_data[mod_data['Difficulty level'] == 'easy'].sort_values('Subject_ID')['Is_Missed'].values
-        medium = mod_data[mod_data['Difficulty level'] == 'medium'].sort_values('Subject_ID')['Is_Missed'].values
-        hard = mod_data[mod_data['Difficulty level'] == 'hard'].sort_values('Subject_ID')['Is_Missed'].values
-
-        if len(easy) == 0 or len(easy) != len(medium) or len(easy) != len(hard):
-            print("Error: Incomplete paired data for subjects.")
-            continue
-
-        try:
-            f_stat, f_p = friedmanchisquare(easy, medium, hard)
-            print(f"Friedman Test (Overall): Stat={f_stat:.3f}, p-value={f_p:.4f}\n")
-        except Exception as e:
-            print(f"Friedman Test failed: {e}\n")
-
-        print("Pairwise Wilcoxon Tests (Bonferroni-corrected alpha = 0.0167):")
-        pairs = [
-            ('Easy vs Medium', easy, medium),
-            ('Medium vs Hard', medium, hard),
-            ('Easy vs Hard', easy, hard),
-        ]
-
-        for label, dist1, dist2 in pairs:
-            if np.array_equal(dist1, dist2):
-                print(f"  {label}: p=1.0000 (Identical distributions)")
-                continue
-            try:
-                _, p_val = wilcoxon(dist1, dist2, zero_method='pratt')
-                sig_label = '(Significant)' if p_val < 0.0167 else '(Not Significant)'
-                print(f"  {label}: p={p_val:.4f} {sig_label}")
-            except Exception as e:
-                print(f"  {label}: Could not calculate ({e})")
-
-    return df_combined, summary_stats, miss_rate_pivot
-
 
 
 
@@ -792,888 +651,205 @@ def test_depth_perception_limits(perception_results_all, color_palette):
 
 
 
-def analyze_attention_redistribution(
-    perception_results_all,
-    experiment_logs_all,
-    demographics,
-    ax=None
-):
-    """
-    Calculates perception and motor metrics across difficulty levels,
-    including modality-specific accuracy for Visual, Audio, and Haptic.
-
-    Invalidated trial:
-        Either perceived value is -1.
-
-    Missed trial:
-        The trial is not invalidated and either perceived value is 0.
-
-    Accuracy:
-        Both perceived angle and distance must match the actual values,
-        calculated among valid-response trials.
-
-    Miss rate:
-        Missed trials / (missed + valid-response trials).
-
-    Modality-specific accuracy:
-        Calculated separately for Visual, Audio, and Haptic feedback.
-
-    Statistical tests:
-        Paired Wilcoxon signed-rank tests between difficulty levels.
-    """
-
+def analyze_attention_redistribution(perception_results_all, experiment_logs_all, demographics, ax=None):
+    _ = ax
     required_demographics_columns = {"Participant ID", "Gender"}
-    missing_demographics_columns = (
-        required_demographics_columns - set(demographics.columns)
-    )
-
+    missing_demographics_columns = required_demographics_columns - set(demographics.columns)
     if missing_demographics_columns:
-        raise ValueError(
-            f"Missing demographics columns: "
-            f"{sorted(missing_demographics_columns)}"
-        )
+        raise ValueError(f"Missing demographics columns: {sorted(missing_demographics_columns)}")
 
-    participant_names = list(perception_results_all.keys())
     demographics = demographics.reset_index(drop=True).copy()
-
-    # ---------------------------------------------------------
-    # Standardize demographics
-    # ---------------------------------------------------------
-
-    demographics["Gender"] = (
-        demographics["Gender"].astype(str).str.strip().str.lower()
-    )
-
-    demographics["Participant ID"] = (
-        demographics["Participant ID"]
-        .astype(str)
-        .apply(lambda x: x.zfill(2) if len(x) == 1 else x)
-    )
-
-    participant_gender_map = dict(
-        zip(
-            demographics["Participant ID"],
-            demographics["Gender"]
-        )
-    )
-
-    # ---------------------------------------------------------
-    # Settings
-    # ---------------------------------------------------------
+    demographics["Gender"] = demographics["Gender"].astype(str).str.strip().str.lower()
+    demographics["Participant ID"] = demographics["Participant ID"].astype(str).apply(lambda x: x.zfill(2) if len(x) == 1 else x)
+    participant_gender_map = dict(zip(demographics["Participant ID"], demographics["Gender"]))
 
     difficulty_order = ["easy", "medium", "hard"]
-
-    modality_order = ["Visual", "Auditory", "Haptic"]
-
-    modality_column = "Modality"
-
-    perc_angle_col = "Perceived angle"
-    perc_dist_col = "Perceived distance"
+    modality_order = ["visual", "auditory", "haptic"]
 
     metrics_list = []
-    modality_accuracy_list = []
+    modality_metrics_list = []
 
-    # ---------------------------------------------------------
-    # Calculate metrics for each participant and difficulty
-    # ---------------------------------------------------------
-
-    for subject_id in participant_names:
-
-        trials_df = perception_results_all.get(subject_id)
+    for subject_id, trials_df in perception_results_all.items():
         logs_df = experiment_logs_all.get(subject_id)
-
-        participant_gender = participant_gender_map.get(
-            subject_id, np.nan
-        )
-
-        if trials_df is None or logs_df is None:
+        if trials_df is None or logs_df is None or trials_df.empty or logs_df.empty:
             continue
 
+        participant_gender = participant_gender_map.get(subject_id, np.nan)
+
+        phase_trials_all = trials_df.copy()
+        phase_logs_all = logs_df.copy()
+
+        perc_angle_col = 'Perceived angle' if 'Perceived angle' in phase_trials_all.columns else 'Angle perceived'
+        perc_dist_col = 'Perceived distance' if 'Perceived distance' in phase_trials_all.columns else 'Distance perceived'
+
+        phase_trials_all['Difficulty level'] = phase_trials_all['Difficulty level'].astype(str).str.strip().str.lower()
+        phase_trials_all['Modality'] = phase_trials_all['Modality'].astype(str).str.strip().str.lower()
+        phase_logs_all['Difficulty level'] = phase_logs_all['Difficulty level'].astype(str).str.strip().str.lower()
+
         for difficulty in difficulty_order:
+            phase_trials = phase_trials_all.loc[phase_trials_all['Difficulty level'] == difficulty].copy()
+            phase_logs = phase_logs_all.loc[phase_logs_all['Difficulty level'] == difficulty].copy()
+            if phase_trials.empty:
+                continue
 
-            phase_trials = trials_df.loc[
-                trials_df["Difficulty level"] == difficulty
-            ].copy()
+            perceived_angle = pd.to_numeric(phase_trials[perc_angle_col], errors='coerce')
+            perceived_distance = pd.to_numeric(phase_trials[perc_dist_col], errors='coerce')
+            invalidated_mask = perceived_angle.eq(-1) | perceived_distance.eq(-1)
+            missed_mask = (~invalidated_mask) & (perceived_angle.eq(0) | perceived_distance.eq(0))
+            valid_response_mask = (~invalidated_mask) & perceived_angle.gt(0) & perceived_distance.gt(0)
 
-            phase_logs = logs_df.loc[
-                logs_df["Difficulty level"] == difficulty
-            ].copy()
-
-            # -------------------------------------------------
-            # Overall perception accuracy
-            # -------------------------------------------------
-
-            perceived_angle = pd.to_numeric(
-                phase_trials[perc_angle_col],
-                errors="coerce"
-            )
-
-            perceived_distance = pd.to_numeric(
-                phase_trials[perc_dist_col],
-                errors="coerce"
-            )
-
-            invalidated_mask = (
-                perceived_angle.eq(-1) |
-                perceived_distance.eq(-1)
-            )
-
-            missed_mask = (
-                ~invalidated_mask &
-                (
-                    perceived_angle.eq(0) |
-                    perceived_distance.eq(0)
-                )
-            )
-
-            valid_response_mask = (
-                ~invalidated_mask &
-                perceived_angle.gt(0) &
-                perceived_distance.gt(0)
-            )
-
-            valid_trials = phase_trials.loc[
-                valid_response_mask
-            ].copy()
-
+            valid_trials = phase_trials.loc[valid_response_mask].copy()
             if not valid_trials.empty:
+                actual_angle = pd.to_numeric(valid_trials['Angle'], errors='coerce')
+                actual_distance = pd.to_numeric(valid_trials['Distance'], errors='coerce')
+                valid_perceived_angle = pd.to_numeric(valid_trials[perc_angle_col], errors='coerce')
+                valid_perceived_distance = pd.to_numeric(valid_trials[perc_dist_col], errors='coerce')
 
-                actual_angle = pd.to_numeric(
-                    valid_trials["Angle"],
-                    errors="coerce"
-                )
-
-                actual_distance = pd.to_numeric(
-                    valid_trials["Distance"],
-                    errors="coerce"
-                )
-
-                valid_perceived_angle = pd.to_numeric(
-                    valid_trials[perc_angle_col],
-                    errors="coerce"
-                )
-
-                valid_perceived_distance = pd.to_numeric(
-                    valid_trials[perc_dist_col],
-                    errors="coerce"
-                )
-
-                correct_mask = (
-                    actual_angle.eq(valid_perceived_angle) &
-                    actual_distance.eq(valid_perceived_distance)
-                )
-
+                correct_mask = actual_angle.eq(valid_perceived_angle) & actual_distance.eq(valid_perceived_distance)
                 accuracy = correct_mask.mean() * 100
-
-                # ---------------------------------------------
-                # Polar accuracy
-                # ---------------------------------------------
 
                 theta_true = actual_angle * (np.pi / 4)
                 theta_perc = valid_perceived_angle * (np.pi / 4)
-
                 r_true = actual_distance
                 r_perc = valid_perceived_distance
-
-                squared_error = (
-                    r_true**2 +
-                    r_perc**2 -
-                    2 * r_true * r_perc *
-                    np.cos(theta_true - theta_perc)
-                )
-
-                geom_error = np.sqrt(
-                    np.maximum(squared_error, 0)
-                )
-
-                r_max = max(
-                    r_true.max(),
-                    r_perc.max()
-                )
-
-                if pd.isna(r_max) or r_max <= 0:
-                    polar_accuracy = np.nan
-                else:
-                    polar_acc_vals = (
-                        1 - geom_error / (2 * r_max)
-                    ) * 100
-
-                    polar_accuracy = (
-                        polar_acc_vals
-                        .clip(lower=0, upper=100)
-                        .mean()
-                    )
-
+                squared_error = r_true**2 + r_perc**2 - 2 * r_true * r_perc * np.cos(theta_true - theta_perc)
+                geom_error = np.sqrt(np.maximum(squared_error, 0))
+                r_max = max(r_true.max(), r_perc.max())
+                polar_accuracy = np.nan if (pd.isna(r_max) or r_max <= 0) else ((1 - geom_error / (2 * r_max)) * 100).clip(lower=0, upper=100).mean()
             else:
                 accuracy = np.nan
                 polar_accuracy = np.nan
 
-            # -------------------------------------------------
-            # Miss rate
-            # -------------------------------------------------
-
             n_missed = int(missed_mask.sum())
+            n_valid_responses = int(valid_response_mask.sum())
+            n_analyzable = n_missed + n_valid_responses
+            miss_rate = (n_missed / n_analyzable * 100) if n_analyzable > 0 else np.nan
 
-            n_valid_responses = int(
-                valid_response_mask.sum()
-            )
-
-            n_analyzable_trials = (
-                n_missed + n_valid_responses
-            )
-
-            miss_rate = (
-                n_missed / n_analyzable_trials * 100
-                if n_analyzable_trials > 0
-                else np.nan
-            )
-
-            # -------------------------------------------------
-            # Reaction time
-            # -------------------------------------------------
-
-            response_start = pd.to_numeric(
-                phase_trials["Response start"],
-                errors="coerce"
-            )
-
-            phase_timestamp = pd.to_numeric(
-                phase_trials["Phase timestamp"],
-                errors="coerce"
-            )
-
+            response_start = pd.to_numeric(phase_trials['Response start'], errors='coerce')
+            phase_timestamp = pd.to_numeric(phase_trials['Phase timestamp'], errors='coerce')
             valid_rt_mask = response_start.gt(0)
+            avg_rt = (response_start.loc[valid_rt_mask] - phase_timestamp.loc[valid_rt_mask]).mean() if valid_rt_mask.any() else np.nan
 
-            avg_rt = (
-                (
-                    response_start.loc[valid_rt_mask] -
-                    phase_timestamp.loc[valid_rt_mask]
-                ).mean()
-                if valid_rt_mask.any()
-                else np.nan
-            )
+            collision_values = pd.to_numeric(phase_logs['Number of collision'], errors='coerce').dropna()
+            collisions = collision_values.iloc[-1] - collision_values.iloc[0] if len(collision_values) >= 2 else np.nan
 
-            # -------------------------------------------------
-            # Collisions
-            # -------------------------------------------------
-
-            collision_values = pd.to_numeric(
-                phase_logs["Number of collision"],
-                errors="coerce"
-            ).dropna()
-
-            collisions = (
-                collision_values.iloc[-1] -
-                collision_values.iloc[0]
-                if len(collision_values) >= 2
-                else np.nan
-            )
-
-            # -------------------------------------------------
-            # Joystick variance
-            # -------------------------------------------------
-
-            thumbstick_x = pd.to_numeric(
-                phase_logs["Thumbstick x"],
-                errors="coerce"
-            )
-
+            thumbstick_x = pd.to_numeric(phase_logs.get('Thumbstick x', np.nan), errors='coerce')
             joystick_var = thumbstick_x.var()
 
-            # -------------------------------------------------
-            # Head variance
-            # -------------------------------------------------
-
-            head_x = (
-                phase_logs["Head rotation"]
-                .astype(str)
-                .str.strip("()")
-                .str.split(",", expand=True)[0]
-            )
-
-            head_var = pd.to_numeric(
-                head_x,
-                errors="coerce"
-            ).var()
-
-            # -------------------------------------------------
-            # Store overall metrics
-            # -------------------------------------------------
+            if 'Head rotation' in phase_logs.columns:
+                head_x = phase_logs['Head rotation'].astype(str).str.strip('()').str.split(',', expand=True)[0]
+                head_var = pd.to_numeric(head_x, errors='coerce').var()
+            else:
+                head_var = np.nan
 
             metrics_list.append({
-                "Subject": subject_id,
-                "Gender": participant_gender,
-                "Difficulty": difficulty,
-                "Accuracy": accuracy,
-                "Polar Accuracy": polar_accuracy,
-                "Miss Rate": miss_rate,
-                "Reaction Time": avg_rt,
-                "Collisions": collisions,
-                "Joystick Variance": joystick_var,
-                "Head Variance": head_var,
-                "Missed Trials": n_missed,
-                "Valid Response Trials": n_valid_responses,
-                "Invalidated Trials": int(
-                    invalidated_mask.sum()
-                ),
-                "Analyzable Trials": n_analyzable_trials
+                'Subject': subject_id,
+                'Gender': participant_gender,
+                'Difficulty': difficulty,
+                'Accuracy': accuracy,
+                'Polar Accuracy': polar_accuracy,
+                'Miss Rate': miss_rate,
+                'Reaction Time': avg_rt,
+                'Collisions': collisions,
+                'Joystick Variance': joystick_var,
+                'Head Variance': head_var,
             })
 
-            # -------------------------------------------------
-            # Modality-specific accuracy
-            # -------------------------------------------------
-
-            if modality_column not in phase_trials.columns:
-                raise ValueError(
-                    f"Missing modality column: "
-                    f"'{modality_column}'"
-                )
-
             for modality in modality_order:
+                modality_trials = phase_trials.loc[phase_trials['Modality'] == modality].copy()
+                mod_angle = pd.to_numeric(modality_trials.get(perc_angle_col, pd.Series(dtype=float)), errors='coerce')
+                mod_distance = pd.to_numeric(modality_trials.get(perc_dist_col, pd.Series(dtype=float)), errors='coerce')
+                mod_invalid = mod_angle.eq(-1) | mod_distance.eq(-1)
+                mod_missed = (~mod_invalid) & (mod_angle.eq(0) | mod_distance.eq(0))
+                mod_valid = (~mod_invalid) & mod_angle.gt(0) & mod_distance.gt(0)
 
-                modality_trials = phase_trials.loc[
-                    phase_trials[modality_column]
-                    .astype(str)
-                    .str.strip()
-                    .str.lower()
-                    == modality.lower()
-                ].copy()
-
-                mod_angle = pd.to_numeric(
-                    modality_trials[perc_angle_col],
-                    errors="coerce"
-                )
-
-                mod_distance = pd.to_numeric(
-                    modality_trials[perc_dist_col],
-                    errors="coerce"
-                )
-
-                mod_invalidated = (
-                    mod_angle.eq(-1) |
-                    mod_distance.eq(-1)
-                )
-
-                mod_valid = (
-                    ~mod_invalidated &
-                    mod_angle.gt(0) &
-                    mod_distance.gt(0)
-                )
-
-                mod_valid_trials = modality_trials.loc[
-                    mod_valid
-                ]
-
+                mod_valid_trials = modality_trials.loc[mod_valid]
                 if not mod_valid_trials.empty:
-
-                    mod_actual_angle = pd.to_numeric(
-                        mod_valid_trials["Angle"],
-                        errors="coerce"
-                    )
-
-                    mod_actual_distance = pd.to_numeric(
-                        mod_valid_trials["Distance"],
-                        errors="coerce"
-                    )
-
-                    mod_perceived_angle = pd.to_numeric(
-                        mod_valid_trials[perc_angle_col],
-                        errors="coerce"
-                    )
-
-                    mod_perceived_distance = pd.to_numeric(
-                        mod_valid_trials[perc_dist_col],
-                        errors="coerce"
-                    )
-
-                    mod_correct = (
-                        mod_actual_angle.eq(
-                            mod_perceived_angle
-                        ) &
-                        mod_actual_distance.eq(
-                            mod_perceived_distance
-                        )
-                    )
-
-                    mod_accuracy = (
-                        mod_correct.mean() * 100
-                    )
-
+                    mod_actual_angle = pd.to_numeric(mod_valid_trials['Angle'], errors='coerce')
+                    mod_actual_distance = pd.to_numeric(mod_valid_trials['Distance'], errors='coerce')
+                    mod_perceived_angle = pd.to_numeric(mod_valid_trials[perc_angle_col], errors='coerce')
+                    mod_perceived_distance = pd.to_numeric(mod_valid_trials[perc_dist_col], errors='coerce')
+                    mod_correct = mod_actual_angle.eq(mod_perceived_angle) & mod_actual_distance.eq(mod_perceived_distance)
+                    mod_accuracy = mod_correct.mean() * 100
                 else:
                     mod_accuracy = np.nan
 
-                modality_accuracy_list.append({
-                    "Subject": subject_id,
-                    "Gender": participant_gender,
-                    "Difficulty": difficulty,
-                    "Modality": modality,
-                    "Accuracy": mod_accuracy
+                mod_n_missed = int(mod_missed.sum())
+                mod_n_valid = int(mod_valid.sum())
+                mod_n_analyzable = mod_n_missed + mod_n_valid
+                mod_miss_rate = (mod_n_missed / mod_n_analyzable * 100) if mod_n_analyzable > 0 else np.nan
+
+                modality_metrics_list.append({
+                    'Subject': subject_id,
+                    'Gender': participant_gender,
+                    'Difficulty': difficulty,
+                    'Modality': modality,
+                    'Accuracy': mod_accuracy,
+                    'Miss Rate': mod_miss_rate,
                 })
 
-    # =========================================================
-    # Create dataframes
-    # =========================================================
-
     metrics_df = pd.DataFrame(metrics_list)
-
-    modality_accuracy_df = pd.DataFrame(
-        modality_accuracy_list
-    )
-
-    # =========================================================
-    # Paired Wilcoxon tests
-    # =========================================================
-
-    comparisons = [
-        ("easy", "medium"),
-        ("medium", "hard"),
-        ("easy", "hard")
-    ]
-
-    modality_pvalues = []
-
-    for modality in modality_order:
-
-        modality_data = modality_accuracy_df.loc[
-            modality_accuracy_df["Modality"] == modality
-        ]
-
-        modality_pivot = modality_data.pivot(
-            index="Subject",
-            columns="Difficulty",
-            values="Accuracy"
-        )
-
-        for diff1, diff2 in comparisons:
-
-            paired_data = modality_pivot[
-                [diff1, diff2]
-            ].dropna()
-
-            n_pairs = len(paired_data)
-
-            if n_pairs == 0:
-
-                p_val = np.nan
-
-            elif np.allclose(
-                paired_data[diff1].values,
-                paired_data[diff2].values
-            ):
-
-                p_val = 1.0
-
-            else:
-
-                try:
-                    _, p_val = wilcoxon(
-                        paired_data[diff1],
-                        paired_data[diff2],
-                        alternative="two-sided"
-                    )
-                except ValueError:
-                    p_val = np.nan
-
-            modality_pvalues.append({
-                "Modality": modality,
-                "Comparison": (
-                    f"{diff1.capitalize()} vs "
-                    f"{diff2.capitalize()}"
-                ),
-                "N": n_pairs,
-                "p-value": p_val
-            })
-
-    modality_pvalues_df = pd.DataFrame(
-        modality_pvalues
-    )
-
-    print("\nModality-specific accuracy:")
-    print(
-        modality_accuracy_df.pivot_table(
-            index="Modality",
-            columns="Difficulty",
-            values="Accuracy",
-            aggfunc="mean"
-        ).round(2)
-    )
-
-    print("\nModality-specific Wilcoxon p-values:")
-    print(modality_pvalues_df.to_string(index=False))
-
-    # =========================================================
-    # Normalize metrics for plotting
-    # =========================================================
-
-    cols_to_norm = [
-        "Accuracy",
-        "Polar Accuracy",
-        "Miss Rate",
-        "Reaction Time",
-        "Collisions",
-        "Joystick Variance",
-        "Head Variance"
-    ]
-
-    norm_df = metrics_df.copy()
-
-    custom_palette = dict(
-        zip(
-            cols_to_norm + [
-                "Visual Accuracy",
-                "Audio Accuracy",
-                "Haptic Accuracy"
-            ],
-            sns.color_palette(
-                "tab10",
-                len(cols_to_norm) + 3
-            )
-        )
-    )
-
-    for col in cols_to_norm:
-
-        column_std = norm_df[col].std()
-
-        if pd.notna(column_std) and column_std != 0:
-            norm_df[col] = (
-                norm_df[col] - norm_df[col].mean()
-            ) / column_std
-        else:
-            norm_df[col] = np.nan
-
-    melted_df = norm_df.melt(
-        id_vars=["Subject", "Gender", "Difficulty"],
-        value_vars=cols_to_norm,
-        var_name="Variable",
-        value_name="Z-Score"
-    )
-
-    # ---------------------------------------------------------
-    # Normalize modality-specific accuracy
-    # ---------------------------------------------------------
-
-    modality_plot_df = modality_accuracy_df.copy()
-
-    modality_plot_df["Variable"] = (
-        modality_plot_df["Modality"] + " Accuracy"
-    )
-
-    modality_variable_order = [
-        "Visual Accuracy",
-        "Audio Accuracy",
-        "Haptic Accuracy"
-    ]
-
-    for variable in modality_variable_order:
-
-        mask = (
-            modality_plot_df["Variable"] == variable
-        )
-
-        values = modality_plot_df.loc[
-            mask, "Accuracy"
-        ]
-
-        column_std = values.std()
-
-        if pd.notna(column_std) and column_std != 0:
-
-            modality_plot_df.loc[
-                mask, "Z-Score"
-            ] = (
-                values - values.mean()
-            ) / column_std
-
-        else:
-
-            modality_plot_df.loc[
-                mask, "Z-Score"
-            ] = np.nan
-
-    modality_melted = modality_plot_df[
-        [
-            "Subject",
-            "Gender",
-            "Difficulty",
-            "Variable",
-            "Z-Score"
-        ]
-    ].copy()
-
-    melted_df = pd.concat(
-        [melted_df, modality_melted],
-        ignore_index=True
-    )
-
-    melted_df["Difficulty"] = pd.Categorical(
-        melted_df["Difficulty"],
-        categories=difficulty_order,
-        ordered=True
-    )
-
-    # =========================================================
-    # Plot
-    # =========================================================
-
-    standalone = ax is None
-
-    if standalone:
-        fig, ax = plt.subplots(
-            figsize=(13, 7)
-        )
-    else:
-        fig = ax.figure
-
-    all_variables = (
-        cols_to_norm + modality_variable_order
-    )
-
-    sns.pointplot(
-        data=melted_df,
-        x="Difficulty",
-        y="Z-Score",
-        hue="Variable",
-        hue_order=all_variables,
-        order=difficulty_order,
-        palette=custom_palette,
-        dodge=0.4,
-        linestyles="-",
-        errorbar=("ci", 95),
-        capsize=0.05,
-        ax=ax
-    )
-
-    # =========================================================
-    # Statistical annotations
-    # =========================================================
-
-    metrics_to_annotate = [
-        "Accuracy",
-        "Polar Accuracy",
-        "Miss Rate",
-        "Collisions",
-        "Joystick Variance",
-        "Visual Accuracy",
-        "Audio Accuracy",
-        "Haptic Accuracy"
-    ]
-
-    bbox_props = dict(
-        boxstyle="round,pad=0.2",
-        facecolor="white",
-        edgecolor="none",
-        alpha=0.85
-    )
-
-    annotation_segments = [
-        ("easy", "medium", 0, 1),
-        ("medium", "hard", 1, 2)
-    ]
-
-    for metric in metrics_to_annotate:
-
-        color = custom_palette[metric]
-
-        segments = annotation_segments.copy()
-
-        if metric in [
-            "Accuracy",
-            "Polar Accuracy",
-            "Visual Accuracy",
-            "Audio Accuracy",
-            "Haptic Accuracy"
-        ]:
-            segments.append(
-                ("easy", "hard", 0, 2)
-            )
-
-        for diff1, diff2, x1, x2 in segments:
-
-            # ---------------------------------------------
-            # Select the appropriate paired data
-            # ---------------------------------------------
-
-            if metric in modality_variable_order:
-
-                modality = metric.replace(
-                    " Accuracy", ""
-                )
-
-                test_row = modality_pvalues_df.loc[
-                    (
-                        modality_pvalues_df["Modality"]
-                        == modality
-                    ) &
-                    (
-                        modality_pvalues_df["Comparison"]
-                        == (
-                            f"{diff1.capitalize()} vs "
-                            f"{diff2.capitalize()}"
-                        )
-                    )
-                ]
-
-                p_val = (
-                    test_row["p-value"].iloc[0]
-                    if not test_row.empty
-                    else np.nan
-                )
-
-            else:
-
-                pivot_df = metrics_df.pivot(
-                    index="Subject",
-                    columns="Difficulty",
-                    values=metric
-                )
-
-                paired_data = pivot_df[
-                    [diff1, diff2]
-                ].dropna()
-
-                if len(paired_data) == 0:
-
-                    p_val = np.nan
-
-                elif np.allclose(
-                    paired_data[diff1].values,
-                    paired_data[diff2].values
-                ):
-
-                    p_val = 1.0
-
-                else:
-
-                    try:
-                        _, p_val = wilcoxon(
-                            paired_data[diff1],
-                            paired_data[diff2],
-                            alternative="two-sided"
-                        )
-                    except ValueError:
-                        p_val = np.nan
-
-            # ---------------------------------------------
-            # Format p-value
-            # ---------------------------------------------
-
-            if pd.isna(p_val):
-                p_str = "p=NA"
-            elif p_val < 0.001:
-                p_str = "p<0.001"
-            else:
-                p_str = f"p={p_val:.3f}"
-
-            # ---------------------------------------------
-            # Determine annotation position
-            # ---------------------------------------------
-
-            y1 = melted_df.loc[
-                (
-                    melted_df["Variable"] == metric
-                ) &
-                (
-                    melted_df["Difficulty"] == diff1
-                ),
-                "Z-Score"
-            ].mean()
-
-            y2 = melted_df.loc[
-                (
-                    melted_df["Variable"] == metric
-                ) &
-                (
-                    melted_df["Difficulty"] == diff2
-                ),
-                "Z-Score"
-            ].mean()
-
-            if pd.isna(y1) or pd.isna(y2):
-                continue
-
-            if diff1 == "easy" and diff2 == "hard":
-
-                y_mid = melted_df.loc[
-                    (
-                        melted_df["Variable"] == metric
-                    ) &
-                    (
-                        melted_df["Difficulty"] == "medium"
-                    ),
-                    "Z-Score"
-                ].mean()
-
-                y_values = [
-                    value for value in [
-                        y1, y2, y_mid
-                    ]
-                    if pd.notna(value)
-                ]
-
-                y_pos = max(y_values) + 0.35
-
-                p_str = (
-                    f"Easy vs Hard: {p_str}"
-                )
-
-            else:
-
-                y_pos = (y1 + y2) / 2
-
-            x_pos = (x1 + x2) / 2
-
-            ax.text(
-                x_pos,
-                y_pos + 0.1,
-                p_str,
-                color=color,
-                ha="center",
-                va="bottom",
-                fontsize=8,
-                fontweight="bold",
-                bbox=bbox_props,
-                zorder=10
-            )
-
-    # =========================================================
-    # Final formatting
-    # =========================================================
-
-    ax.set_ylabel(
-        "Normalized Metric Value (Z-Score)",
-        fontsize=11
-    )
-
-    ax.grid(True, alpha=0.3)
-
-    legend = ax.get_legend()
-
-    if legend is not None:
-        legend.set_title("Variable")
-        legend.set_bbox_to_anchor((1.03, 1))
-        legend._loc = 2
-
-    fig.tight_layout()
-
-    plt.savefig(
-        "across_difficulty.pdf",
-        format="pdf",
-        bbox_inches="tight"
-    )
-
+    modality_metrics_df = pd.DataFrame(modality_metrics_list)
+    return metrics_df, modality_metrics_df
+
+
+def difficulty_specific_redistribution(perception_results_all, experiment_logs_all, demographics, color_palette):
+    metrics_df, _ = analyze_attention_redistribution(perception_results_all, experiment_logs_all, demographics)
+    if metrics_df.empty:
+        print('No valid data found for difficulty_specific_redistribution.')
+        return None
+
+    difficulty_order = ['easy', 'medium', 'hard']
+    metrics_to_plot = ['Accuracy', 'Polar Accuracy', 'Miss Rate', 'Reaction Time', 'Collisions', 'Joystick Variance', 'Head Variance']
+
+    sns.set_theme(style='whitegrid', context='paper', font_scale=1.0)
+    fig, axes = plt.subplots(2, 4, figsize=(20, 9), sharex=True)
+    axes = axes.flatten()
+
+    for i, metric in enumerate(metrics_to_plot):
+        sns.pointplot(data=metrics_df, x='Difficulty', y=metric, order=difficulty_order, errorbar=('ci', 95), capsize=0.1, color=color_palette.get('total', '#2205d1'), ax=axes[i])
+        axes[i].set_title(metric, fontweight='bold')
+        axes[i].set_xlabel('Difficulty')
+        axes[i].set_ylabel(metric)
+
+    axes[7].axis('off')
+    fig.suptitle('Difficulty-Specific Redistribution Metrics', fontsize=15, fontweight='bold')
+    plt.tight_layout()
     plt.show()
-
-    return (
-        metrics_df,
-        modality_accuracy_df,
-        modality_pvalues_df
-    )
+    return metrics_df
 
 
+def difficulty_modality_specific_redistribution(perception_results_all, experiment_logs_all, demographics, color_palette):
+    _, modality_metrics_df = analyze_attention_redistribution(perception_results_all, experiment_logs_all, demographics)
+    if modality_metrics_df.empty:
+        print('No valid data found for difficulty_modality_specific_redistribution.')
+        return None
 
+    difficulty_order = ['easy', 'medium', 'hard']
+    modality_order = ['visual', 'auditory', 'haptic']
 
+    sns.set_theme(style='whitegrid', context='paper', font_scale=1.0)
+    fig, axes = plt.subplots(1, 4, figsize=(24, 5), sharex=True)
 
+    title_map = {'visual': 'Visual Accuracy', 'auditory': 'Audio Accuracy', 'haptic': 'Haptic Accuracy'}
+
+    for i, modality in enumerate(modality_order):
+        sub = modality_metrics_df[modality_metrics_df['Modality'] == modality]
+        sns.pointplot(data=sub, x='Difficulty', y='Accuracy', order=difficulty_order, errorbar=('ci', 95), capsize=0.1, color=color_palette.get(modality, '#333333'), ax=axes[i])
+        axes[i].set_title(title_map[modality], fontweight='bold')
+        axes[i].set_xlabel('Difficulty')
+        axes[i].set_ylabel('Accuracy (%)')
+
+    sns.pointplot(data=modality_metrics_df, x='Difficulty', y='Miss Rate', hue='Modality', order=difficulty_order, hue_order=modality_order, palette={m: color_palette[m] for m in modality_order}, errorbar=('ci', 95), capsize=0.1, ax=axes[3])
+    axes[3].set_title('Miss Rate by Modality', fontweight='bold')
+    axes[3].set_xlabel('Difficulty')
+    axes[3].set_ylabel('Miss Rate (%)')
+    axes[3].legend(title='Modality')
+
+    fig.suptitle('Difficulty × Modality Redistribution Metrics', fontsize=15, fontweight='bold')
+    plt.tight_layout()
+    plt.show()
+    return modality_metrics_df
 
 
 def plot_collision_vs_accuracy(perception_results_all, experiment_logs_all, color_palette, ax=None):
@@ -1786,115 +962,6 @@ def plot_collision_vs_accuracy(perception_results_all, experiment_logs_all, colo
     return df
 
 
-def test_mrt_interaction(perception_results_all, experiment_logs_all, color_palette, axes=None):
-    """
-    Evaluates Multiple Resource Theory by plotting the Modality x Difficulty interaction
-    for Reaction Time, Angular Error, and Cue-Window Collisions.
-
-    If `axes` (an array-like of 3 Matplotlib Axes) is provided, the plots are
-    drawn onto those axes instead of creating a new figure, allowing this
-    function to be embedded in a larger dashboard.
-    """
-    interaction_data = []
-
-    for subject_id in perception_results_all.keys():
-        trials_df = perception_results_all.get(subject_id)
-        logs_df = experiment_logs_all.get(subject_id)
-
-        if trials_df is None or trials_df.empty or logs_df is None or logs_df.empty:
-            continue
-
-        # Standardize column names
-        diff_col = 'Difficulty level' if 'Difficulty level' in trials_df.columns else 'Difficulty'
-        perc_angle_col = 'Angle perceived' if 'Angle perceived' in trials_df.columns else 'Perceived angle'
-
-        for _, trial in trials_df.iterrows():
-            modality = trial['Modality']
-            difficulty = trial[diff_col].lower()
-
-            # Skip invalid modalities or missed trials for RT and Error calculations
-            if modality not in ['visual', 'auditory', 'haptic'] or trial[perc_angle_col] <= 0:
-                continue
-
-            # 1. Calculate Reaction Time
-            rt = trial['Response start'] - trial['Phase timestamp']
-
-            # 2. Calculate Circular Angular Error (0 to 4)
-            diff = abs(trial['Angle'] - trial[perc_angle_col])
-            angular_error = min(diff, 8 - diff)
-
-            # 3. Calculate Collisions during the cue window (Phase timestamp to Phase timestamp + 2s)
-            start_time = trial['Phase timestamp']
-            end_time = start_time + 2.0
-
-            # Isolate the continuous log data for this specific 2-second window
-            window_logs = logs_df[(logs_df['Timestamp'] >= start_time) &
-                                  (logs_df['Timestamp'] <= end_time) &
-                                  (logs_df['Difficulty level'].str.lower() == difficulty)]
-
-            if not window_logs.empty:
-                # Collisions are cumulative in the logs; subtract the first value from the last
-                cue_collisions = window_logs['Number of collision'].iloc[-1] - window_logs['Number of collision'].iloc[
-                    0]
-            else:
-                cue_collisions = 0
-
-            interaction_data.append({
-                'Subject': subject_id,
-                'Modality': modality.capitalize(),
-                'Difficulty': difficulty.capitalize(),
-                'Reaction Time': rt,
-                'Angular Error': angular_error,
-                'Cue Collisions': cue_collisions
-            })
-
-    # Create the DataFrame
-    df_interaction = pd.DataFrame(interaction_data)
-
-    # Reorder categories for plotting
-    difficulty_order = ['Easy', 'Medium', 'Hard']
-    df_interaction['Difficulty'] = pd.Categorical(df_interaction['Difficulty'], categories=difficulty_order,
-                                                  ordered=True)
-
-    # Generate Interaction Plots
-    sns.set_theme(style="whitegrid", context="paper", font_scale=1.2)
-    standalone = axes is None
-    if standalone:
-        fig, axes = plt.subplots(1, 3, figsize=(16, 5))
-
-    palette = {mod.capitalize(): color for mod, color in color_palette.items()}
-    markers = {'Visual': 'o', 'Auditory': 's', 'Haptic': '^'}
-
-    # Plot 1: Reaction Time
-    sns.pointplot(data=df_interaction, x='Difficulty', y='Reaction Time', hue='Modality',
-                  palette=palette, ax=axes[0], dodge=True)
-    axes[0].set_title('Interaction: Reaction Time', fontweight='bold')
-    axes[0].set_ylabel('Reaction Time (s)')
-    axes[0].get_legend().remove()
-
-    # Plot 2: Angular Error
-    sns.pointplot(data=df_interaction, x='Difficulty', y='Angular Error', hue='Modality',
-                  palette=palette, ax=axes[1], dodge=True)
-    axes[1].set_title('Interaction: Angular Error', fontweight='bold')
-    axes[1].set_ylabel('Mean Angular Error')
-    axes[1].get_legend().remove()
-
-    # Plot 3: Collisions during Cue
-    sns.pointplot(data=df_interaction, x='Difficulty', y='Cue Collisions', hue='Modality',
-                  palette=palette, ax=axes[2], dodge=True)
-    axes[2].set_title('Interaction: Collisions During Cue', fontweight='bold')
-    axes[2].set_ylabel('Mean Collisions (per 2s window)')
-
-    # Place a single legend outside the plots
-    axes[2].legend(title='Modality', bbox_to_anchor=(1.05, 1), loc='upper left')
-
-    if standalone:
-        fig.suptitle('Dual-Task Interference: Multiple Resource Theory Evaluation', fontsize=16, fontweight='bold', y=1.05)
-        plt.tight_layout()
-        plt.show()
-
-    return df_interaction
-
 
 
 def plot_longitudinal_performance(perception_results_all, experiment_logs_all, color_palette):
@@ -1959,7 +1026,7 @@ def plot_longitudinal_performance(perception_results_all, experiment_logs_all, c
 
     # --- Plotting ---
     sns.set_theme(style="whitegrid", context="paper", font_scale=1.2)
-    fig, axes = plt.subplots(4, 1, figsize=(14, 18), sharex=True)
+    fig, axes = plt.subplots(4, 1, figsize=(8, 18), sharex=True)
 
     palette = color_palette
     modality_order = ['auditory', 'haptic', 'visual']
@@ -2034,214 +1101,30 @@ def plot_longitudinal_performance(perception_results_all, experiment_logs_all, c
         ax.text(180, y_pos, 'Phase 3', ha='center', va='bottom', color='gray', fontsize=10)
 
     plt.tight_layout()
+    plt.savefig('modality_longitudinal_performances.svg', format='svg', bbox_inches='tight')
     plt.show()
 
     return combined_df
 
 
-def plot_performance_by_condition(perception_results_all, experiment_logs_all, color_palette, axes=None):
-    """
-    Calculates subject-level performance metrics broken down by Modality and Difficulty.
-    Plots them in a 2x4 grid, annotating all with paired Wilcoxon signed-rank p-values.
-    """
-    # --- Part A: Extract Modality & Difficulty Metrics ---
-    mod_metrics = []
-    diff_metrics = []
 
-    for subject, df in perception_results_all.items():
-        if df is None or df.empty:
-            continue
+def plot_performance_by_gender(perception_results_all, experiment_logs_all, demographics_path, color_palette, axes=None):
+    """Create three separate gender-comparison figures: modality, difficulty, and overall."""
+    _ = axes
 
-        df_copy = df.copy()
-        perc_angle_col = 'Angle perceived' if 'Angle perceived' in df_copy.columns else 'Perceived angle'
-        perc_dist_col = 'Distance perceived' if 'Distance perceived' in df_copy.columns else 'Perceived distance'
-        dist_col = 'Distance' if 'Distance' in df_copy.columns else 'Distnce'
-
-        # Filter out hardware faults (-1)
-        df_copy = df_copy[df_copy[perc_angle_col] >= 0].copy()
-
-        if 'Modality' in df_copy.columns:
-            df_copy['Modality'] = df_copy['Modality'].astype(str).str.strip().str.capitalize()
-        if 'Difficulty level' in df_copy.columns:
-            df_copy['Difficulty level'] = df_copy['Difficulty level'].astype(str).str.strip().str.capitalize()
-
-        # 1. Extract Modality Metrics
-        for mod in ['Visual', 'Auditory', 'Haptic']:
-            if 'Modality' not in df_copy.columns: break
-            mod_df = df_copy[df_copy['Modality'] == mod]
-            if mod_df.empty: continue
-
-            miss_rate = (mod_df[perc_angle_col] == 0).mean()
-            valid_trials = mod_df[(mod_df[perc_angle_col] > 0) & (mod_df[perc_dist_col] > 0)]
-
-            if not valid_trials.empty:
-                ang_acc = (valid_trials['Angle'] == valid_trials[perc_angle_col]).mean()
-                dist_acc = (valid_trials[dist_col] == valid_trials[perc_dist_col]).mean()
-                total_acc = ((valid_trials['Angle'] == valid_trials[perc_angle_col]) &
-                             (valid_trials[dist_col] == valid_trials[perc_dist_col])).mean()
-            else:
-                ang_acc, dist_acc, total_acc = np.nan, np.nan, np.nan
-
-            mod_metrics.append({'Subject': subject, 'Modality': mod, 'Miss Rate': miss_rate,
-                                'Angular Accuracy': ang_acc, 'Distance Accuracy': dist_acc,
-                                'Total Accuracy': total_acc})
-
-        # 2. Extract Difficulty Metrics (Including Total Accuracy)
-        for diff in ['Easy', 'Medium', 'Hard']:
-            if 'Difficulty level' not in df_copy.columns: break
-            diff_df = df_copy[df_copy['Difficulty level'] == diff]
-            if diff_df.empty: continue
-
-            miss_rate = (diff_df[perc_angle_col] == 0).mean()
-            valid_trials = diff_df[(diff_df[perc_angle_col] > 0) & (diff_df[perc_dist_col] > 0)]
-
-            if not valid_trials.empty:
-                ang_acc = (valid_trials['Angle'] == valid_trials[perc_angle_col]).mean()
-                dist_acc = (valid_trials[dist_col] == valid_trials[perc_dist_col]).mean()
-                total_acc = ((valid_trials['Angle'] == valid_trials[perc_angle_col]) &
-                             (valid_trials[dist_col] == valid_trials[perc_dist_col])).mean()
-            else:
-                ang_acc, dist_acc, total_acc = np.nan, np.nan, np.nan
-
-            diff_metrics.append({'Subject': subject, 'Difficulty': diff, 'Miss Rate': miss_rate,
-                                 'Angular Accuracy': ang_acc, 'Distance Accuracy': dist_acc,
-                                 'Total Accuracy': total_acc})
-
-    df_mod = pd.DataFrame(mod_metrics)
-    df_diff = pd.DataFrame(diff_metrics)
-
-    # --- Helper Function for Statistical Annotation (Wilcoxon Signed-Rank) ---
-    def annotate_wilcoxon(ax, data, metric, condition_col, pairs, order):
-        # Pivot to align subject data into perfectly matched pairs
-        pivot_df = data.pivot(index='Subject', columns=condition_col, values=metric)
-
-        y_max = data[metric].max()
-        y_range = data[metric].max() - data[metric].min()
-        if pd.isna(y_range) or y_range == 0: y_range = 0.1
-
-        # Expand Y-axis to make room for 3 stacked brackets
-        ax.set_ylim(ax.get_ylim()[0], ax.get_ylim()[1] + y_range * 0.35)
-
-        for i, (c1, c2) in enumerate(pairs):
-            p_text = "N/A"
-            if c1 in pivot_df.columns and c2 in pivot_df.columns:
-                paired_data = pivot_df[[c1, c2]].dropna()
-                if len(paired_data) > 1:
-                    # Wilcoxon requires the differences between pairs to be non-zero
-                    diffs = paired_data[c1] - paired_data[c2]
-                    if not (diffs == 0).all():
-                        stat, p = wilcoxon(paired_data[c1], paired_data[c2], alternative='two-sided')
-                        p_text = f"p={p:.3f}" if p >= 0.001 else "p<0.001"
-
-            x1 = order.index(c1)
-            x2 = order.index(c2)
-
-            # Stack brackets vertically
-            bracket_y = y_max + y_range * 0.05 + (i * y_range * 0.1)
-            bracket_h = y_range * 0.02
-            ax.plot([x1, x1, x2, x2], [bracket_y, bracket_y + bracket_h, bracket_y + bracket_h, bracket_y], lw=1.2,
-                    color='k')
-
-            if p_text != "N/A":
-                # Safely strip text for float comparison to avoid crashing on 'p<0.001'
-                clean_p_val = p_text.replace('p', '').replace('=', '').replace('<', '').strip()
-                weight = 'bold' if float(clean_p_val) < 0.05 else 'normal'
-            else:
-                weight = 'normal'
-
-            ax.text((x1 + x2) / 2, bracket_y + bracket_h, p_text, ha='center', va='bottom', color='k', fontsize=10,
-                    fontweight=weight)
-
-    # --- Plotting ---
-    sns.set_theme(style="whitegrid", context="paper", font_scale=1.2)
-    standalone = axes is None
-    if standalone:
-        fig, axes = plt.subplots(2, 4, figsize=(24, 12))
-
-    axes = axes.flatten() if standalone else np.array(axes).flatten()
-
-    mod_order = ['Visual', 'Auditory', 'Haptic']
-    diff_order = ['Easy', 'Medium', 'Hard']
-
-    palette_mod = {mod: color_palette[mod.lower()] for mod in mod_order}
-    palette_diff = {diff: color_palette[diff.lower()] for diff in diff_order}
-
-    mod_pairs = [('Visual', 'Auditory'), ('Auditory', 'Haptic'), ('Visual', 'Haptic')]
-    diff_pairs = [('Easy', 'Medium'), ('Medium', 'Hard'), ('Easy', 'Hard')]
-
-    # -----------------------------------------------
-    # Plot Row 1 (axes 0-3): Modality Metrics
-    # -----------------------------------------------
-    modality_metrics = ['Miss Rate', 'Angular Accuracy', 'Distance Accuracy', 'Total Accuracy']
-    for i, metric in enumerate(modality_metrics):
-        if not df_mod.empty and metric in df_mod.columns:
-            sns.boxplot(data=df_mod, x='Modality', y=metric, order=mod_order, palette=palette_mod, ax=axes[i],
-                        showmeans=True,
-                        meanprops={"marker": "o", "markerfacecolor": "white", "markeredgecolor": "black"})
-            sns.stripplot(data=df_mod, x='Modality', y=metric, order=mod_order, palette=palette_mod, ax=axes[i],
-                          alpha=0.6, jitter=True, edgecolor='gray', linewidth=0.5)
-
-            axes[i].set_title(f'{metric}\n(by Modality)', fontsize=13)
-            axes[i].set_xlabel('')
-            # axes[i].set_ylabel(metric, fontweight='bold')
-
-            annotate_wilcoxon(axes[i], df_mod, metric, 'Modality', mod_pairs, mod_order)
-
-    # -----------------------------------------------
-    # Plot Row 2 (axes 4-7): Difficulty Metrics
-    # -----------------------------------------------
-    difficulty_metrics = ['Miss Rate', 'Angular Accuracy', 'Distance Accuracy', 'Total Accuracy']
-    for j, metric in enumerate(difficulty_metrics):
-        idx = j + 4
-        if not df_diff.empty and metric in df_diff.columns:
-            sns.boxplot(data=df_diff, x='Difficulty', y=metric, order=diff_order, palette=palette_diff, ax=axes[idx],
-                        showmeans=True,
-                        meanprops={"marker": "o", "markerfacecolor": "white", "markeredgecolor": "black"})
-            sns.stripplot(data=df_diff, x='Difficulty', y=metric, order=diff_order, palette=palette_diff, ax=axes[idx],
-                          alpha=0.6, jitter=True, edgecolor='gray', linewidth=0.5)
-
-            axes[idx].set_title(f'{metric}\n(by Difficulty)', fontweight='bold', fontsize=13)
-            axes[idx].set_xlabel('')
-            axes[idx].set_ylabel(metric, fontweight='bold')
-
-            annotate_wilcoxon(axes[idx], df_diff, metric, 'Difficulty', diff_pairs, diff_order)
-
-    if standalone:
-        plt.tight_layout(pad=2.0)
-        plt.show()
-
-
-def plot_performance_by_gender(perception_results_all, experiment_logs_all, demographics_path, color_palette,
-                               axes=None):
-    """
-    Calculates subject-level performance metrics broken down by Modality, Difficulty, and Gender.
-    Plots them in a 3x4 grid, annotating all with unpaired Wilcoxon rank-sum p-values
-    comparing Male vs Female within each condition. Colors are mapped to Modality/Difficulty.
-    Safely handles omitted participants.
-    """
-    # Fix potential missing hash in color palette if needed
     for key in color_palette:
         if isinstance(color_palette[key], str) and not color_palette[key].startswith('#'):
             color_palette[key] = '#' + color_palette[key]
 
-    # 1. Load demographics to get Gender mapping safely
     demo_df = pd.read_csv(demographics_path)
-
-    # Safely map Subject IDs to avoid length mismatch errors if participants were omitted
     if 'Participant ID' in demo_df.columns:
         demo_df['Subject'] = demo_df['Participant ID'].astype(str).apply(lambda x: x.zfill(2) if len(x) == 1 else x)
     elif 'Folder_Name' in demo_df.columns:
         demo_df['Subject'] = demo_df['Folder_Name'].astype(str)
     else:
-        # Fallback: Create IDs based on the original full cohort sequence
         demo_df['Subject'] = [f"{i:02d}" for i in range(1, len(demo_df) + 1)]
 
-    # --- Part A: Extract Modality, Difficulty, and Collision Metrics ---
-    mod_metrics = []
-    diff_metrics = []
-    diff_col_metrics = []
-    tot_col_metrics = []
-    tot_metrics = []  # Added for Overall Total Accuracy
+    mod_metrics, diff_metrics, diff_col_metrics, tot_col_metrics, tot_metrics = [], [], [], [], []
 
     for subject, df in perception_results_all.items():
         if df is None or df.empty:
@@ -2252,88 +1135,63 @@ def plot_performance_by_gender(perception_results_all, experiment_logs_all, demo
         perc_dist_col = 'Distance perceived' if 'Distance perceived' in df_copy.columns else 'Perceived distance'
         dist_col = 'Distance' if 'Distance' in df_copy.columns else 'Distnce'
 
-        # Filter out hardware faults (-1)
         df_copy = df_copy[df_copy[perc_angle_col] >= 0].copy()
-
         if 'Modality' in df_copy.columns:
             df_copy['Modality'] = df_copy['Modality'].astype(str).str.strip().str.capitalize()
         if 'Difficulty level' in df_copy.columns:
             df_copy['Difficulty level'] = df_copy['Difficulty level'].astype(str).str.strip().str.capitalize()
 
-        # 1. Extract Modality Metrics
         for mod in ['Visual', 'Auditory', 'Haptic']:
-            if 'Modality' not in df_copy.columns: break
+            if 'Modality' not in df_copy.columns:
+                break
             mod_df = df_copy[df_copy['Modality'] == mod]
-            if mod_df.empty: continue
-
+            if mod_df.empty:
+                continue
             miss_rate = (mod_df[perc_angle_col] == 0).mean()
             valid_trials = mod_df[(mod_df[perc_angle_col] > 0) & (mod_df[perc_dist_col] > 0)]
-
             if not valid_trials.empty:
                 ang_acc = (valid_trials['Angle'] == valid_trials[perc_angle_col]).mean()
                 dist_acc = (valid_trials[dist_col] == valid_trials[perc_dist_col]).mean()
-                total_acc = ((valid_trials['Angle'] == valid_trials[perc_angle_col]) &
-                             (valid_trials[dist_col] == valid_trials[perc_dist_col])).mean()
+                total_acc = ((valid_trials['Angle'] == valid_trials[perc_angle_col]) & (valid_trials[dist_col] == valid_trials[perc_dist_col])).mean()
             else:
                 ang_acc, dist_acc, total_acc = np.nan, np.nan, np.nan
+            mod_metrics.append({'Subject': subject, 'Modality': mod, 'Miss Rate': miss_rate, 'Angular Accuracy': ang_acc, 'Distance Accuracy': dist_acc, 'Total Accuracy': total_acc})
 
-            mod_metrics.append({'Subject': subject, 'Modality': mod, 'Miss Rate': miss_rate,
-                                'Angular Accuracy': ang_acc, 'Distance Accuracy': dist_acc,
-                                'Total Accuracy': total_acc})
-
-        # 2. Extract Difficulty Metrics
         for diff in ['Easy', 'Medium', 'Hard']:
-            if 'Difficulty level' not in df_copy.columns: break
+            if 'Difficulty level' not in df_copy.columns:
+                break
             diff_df = df_copy[df_copy['Difficulty level'] == diff]
-            if diff_df.empty: continue
-
+            if diff_df.empty:
+                continue
             miss_rate = (diff_df[perc_angle_col] == 0).mean()
             valid_trials = diff_df[(diff_df[perc_angle_col] > 0) & (diff_df[perc_dist_col] > 0)]
-
             if not valid_trials.empty:
                 ang_acc = (valid_trials['Angle'] == valid_trials[perc_angle_col]).mean()
                 dist_acc = (valid_trials[dist_col] == valid_trials[perc_dist_col]).mean()
-                total_acc = ((valid_trials['Angle'] == valid_trials[perc_angle_col]) &
-                             (valid_trials[dist_col] == valid_trials[perc_dist_col])).mean()
+                total_acc = ((valid_trials['Angle'] == valid_trials[perc_angle_col]) & (valid_trials[dist_col] == valid_trials[perc_dist_col])).mean()
             else:
                 ang_acc, dist_acc, total_acc = np.nan, np.nan, np.nan
+            diff_metrics.append({'Subject': subject, 'Difficulty': diff, 'Miss Rate': miss_rate, 'Angular Accuracy': ang_acc, 'Distance Accuracy': dist_acc, 'Total Accuracy': total_acc})
 
-            diff_metrics.append({'Subject': subject, 'Difficulty': diff, 'Miss Rate': miss_rate,
-                                 'Angular Accuracy': ang_acc, 'Distance Accuracy': dist_acc,
-                                 'Total Accuracy': total_acc})
-
-        # 3. Extract OVERALL Total Accuracy Metric
         all_valid = df_copy[(df_copy[perc_angle_col] > 0) & (df_copy[perc_dist_col] > 0)]
-        if not all_valid.empty:
-            overall_tot_acc = ((all_valid['Angle'] == all_valid[perc_angle_col]) &
-                               (all_valid[dist_col] == all_valid[perc_dist_col])).mean()
-        else:
-            overall_tot_acc = np.nan
-
+        overall_tot_acc = ((all_valid['Angle'] == all_valid[perc_angle_col]) & (all_valid[dist_col] == all_valid[perc_dist_col])).mean() if not all_valid.empty else np.nan
         tot_metrics.append({'Subject': subject, 'Total Accuracy': overall_tot_acc})
 
-        # 4. Extract Collision Metrics (Total and Per Phase)
         logs_df = experiment_logs_all.get(subject)
         if logs_df is not None and not logs_df.empty and 'Number of collision' in logs_df.columns:
             valid_logs = logs_df.dropna(subset=['Number of collision']).copy()
             if not valid_logs.empty:
                 valid_logs['Number of collision'] = pd.to_numeric(valid_logs['Number of collision'], errors='coerce')
-
-                # Total Collisions
                 tot_col = valid_logs['Number of collision'].max() - valid_logs['Number of collision'].min()
                 tot_col_metrics.append({'Subject': subject, 'Total Collisions': tot_col})
-
-                # Phase Collisions
                 if 'Difficulty level' in valid_logs.columns:
-                    valid_logs['Difficulty level'] = valid_logs['Difficulty level'].astype(
-                        str).str.strip().str.capitalize()
+                    valid_logs['Difficulty level'] = valid_logs['Difficulty level'].astype(str).str.strip().str.capitalize()
                     for diff in ['Easy', 'Medium', 'Hard']:
                         diff_logs = valid_logs[valid_logs['Difficulty level'] == diff]
                         if not diff_logs.empty:
                             phase_col = diff_logs['Number of collision'].max() - diff_logs['Number of collision'].min()
                             diff_col_metrics.append({'Subject': subject, 'Difficulty': diff, 'Collisions': phase_col})
 
-    # Prepare and merge DataFrames with Demographics (inner merge automatically drops omitted participants)
     df_mod = pd.DataFrame(mod_metrics)
     if not df_mod.empty:
         df_mod = pd.merge(df_mod, demo_df, on='Subject', how='inner').dropna(subset=['Gender'])
@@ -2364,175 +1222,134 @@ def plot_performance_by_gender(perception_results_all, experiment_logs_all, demo
         df_tot_col['Gender'] = df_tot_col['Gender'].str.capitalize()
         df_tot_col['Group'] = df_tot_col['Gender']
 
-    # --- Helper Function for Statistical Annotation (Wilcoxon Rank-Sum Unpaired) ---
     def annotate_wilcoxon_unpaired(ax, data, metric, pairs, order):
         y_max = data[metric].max()
         y_min = data[metric].min()
         y_range = y_max - y_min
-        if pd.isna(y_range) or y_range == 0: y_range = 0.1
-
-        # Expand Y-axis to make room for brackets
+        if pd.isna(y_range) or y_range == 0:
+            y_range = 0.1
         ax.set_ylim(ax.get_ylim()[0], ax.get_ylim()[1] + y_range * 0.2)
 
         for g1, g2 in pairs:
-            p_text = "N/A"
+            p_text = 'N/A'
             d1 = data[data['Group'] == g1][metric].dropna()
             d2 = data[data['Group'] == g2][metric].dropna()
-
             if len(d1) > 1 and len(d2) > 1:
-                # Unpaired Wilcoxon Rank-Sum test
-                stat, p = ranksums(d1, d2, alternative='two-sided')
+                _, p = ranksums(d1, d2, alternative='two-sided')
+                p_text = '*\np<0.001' if p < 0.001 else f'p={p:.3f}'
 
-                if p < 0.001:
-                    p_text = "*\np<0.001"
-                else:
-                    p_text = f"p={p:.3f}"
-
-            x1 = order.index(g1)
-            x2 = order.index(g2)
-
+            x1, x2 = order.index(g1), order.index(g2)
             bracket_y = y_max + y_range * 0.05
             bracket_h = y_range * 0.02
-            ax.plot([x1, x1, x2, x2], [bracket_y, bracket_y + bracket_h, bracket_y + bracket_h, bracket_y], lw=1.2,
-                    color='k')
+            ax.plot([x1, x1, x2, x2], [bracket_y, bracket_y + bracket_h, bracket_y + bracket_h, bracket_y], lw=1.2, color='k')
 
-            if p_text != "N/A":
-                # Safely parse text for float comparison
-                if "<" in p_text:
-                    weight = 'bold'
-                else:
-                    clean_p_val = float(p_text.split('=')[-1])
-                    weight = 'bold' if clean_p_val < 0.05 else 'normal'
+            if p_text != 'N/A':
+                weight = 'bold' if ('<' in p_text or float(p_text.split('=')[-1]) < 0.05) else 'normal'
             else:
                 weight = 'normal'
+            ax.text((x1 + x2) / 2, bracket_y + bracket_h, p_text, ha='center', va='bottom', color='k', fontsize=10, fontweight=weight)
 
-            ax.text((x1 + x2) / 2, bracket_y + bracket_h, p_text, ha='center', va='bottom', color='k', fontsize=10,
-                    fontweight=weight)
+    sns.set_theme(style='whitegrid', context='paper', font_scale=1.1)
 
-    # --- Plotting ---
-    sns.set_theme(style="whitegrid", context="paper", font_scale=1.2)
-    standalone = axes is None
-    if standalone:
-        fig, axes = plt.subplots(3, 4, figsize=(24, 18))
-
-    axes = axes.flatten() if standalone else np.array(axes).flatten()
-
-    mod_order = ['Visual\nMale', 'Visual\nFemale', 'Auditory\nMale', 'Auditory\nFemale', 'Haptic\nMale',
-                 'Haptic\nFemale']
+    mod_order = ['Visual\nMale', 'Visual\nFemale', 'Auditory\nMale', 'Auditory\nFemale', 'Haptic\nMale', 'Haptic\nFemale']
     diff_order = ['Easy\nMale', 'Easy\nFemale', 'Medium\nMale', 'Medium\nFemale', 'Hard\nMale', 'Hard\nFemale']
-
-    # Map colors strictly to Modality and Difficulty (using [0] to extract the condition, ignoring gender)
     palette_mod = {group: color_palette[group.split('\n')[0].lower()] for group in mod_order}
     palette_diff = {group: color_palette[group.split('\n')[0].lower()] for group in diff_order}
-
-    mod_pairs = [('Visual\nMale', 'Visual\nFemale'), ('Auditory\nMale', 'Auditory\nFemale'),
-                 ('Haptic\nMale', 'Haptic\nFemale')]
+    mod_pairs = [('Visual\nMale', 'Visual\nFemale'), ('Auditory\nMale', 'Auditory\nFemale'), ('Haptic\nMale', 'Haptic\nFemale')]
     diff_pairs = [('Easy\nMale', 'Easy\nFemale'), ('Medium\nMale', 'Medium\nFemale'), ('Hard\nMale', 'Hard\nFemale')]
-
-    # -----------------------------------------------
-    # Plot Row 1 (axes 0-3): Modality Metrics
-    # -----------------------------------------------
-    modality_metrics = ['Miss Rate', 'Angular Accuracy', 'Distance Accuracy', 'Total Accuracy']
-    for i, metric in enumerate(modality_metrics):
-        if not df_mod.empty and metric in df_mod.columns:
-            sns.boxplot(data=df_mod, x='Group', y=metric, order=mod_order, palette=palette_mod, ax=axes[i],
-                        showmeans=True,
-                        meanprops={"marker": "o", "markerfacecolor": "white", "markeredgecolor": "black"})
-            sns.stripplot(data=df_mod, x='Group', y=metric, order=mod_order, palette=palette_mod, ax=axes[i],
-                          alpha=0.6, jitter=True, edgecolor='gray', linewidth=0.5)
-
-            axes[i].set_title(f'{metric}\n(Gender & Modality)', fontweight='bold', fontsize=13)
-            axes[i].set_xlabel('')
-            axes[i].set_ylabel(metric, fontweight='bold')
-
-            axes[i].axvline(1.5, color='gray', linestyle=':', alpha=0.7)
-            axes[i].axvline(3.5, color='gray', linestyle=':', alpha=0.7)
-
-            annotate_wilcoxon_unpaired(axes[i], df_mod, metric, mod_pairs, mod_order)
-
-    # -----------------------------------------------
-    # Plot Row 2 (axes 4-7): Difficulty Metrics
-    # -----------------------------------------------
-    difficulty_metrics = ['Miss Rate', 'Angular Accuracy', 'Distance Accuracy', 'Total Accuracy']
-    for j, metric in enumerate(difficulty_metrics):
-        idx = j + 4
-        if not df_diff.empty and metric in df_diff.columns:
-            sns.boxplot(data=df_diff, x='Group', y=metric, order=diff_order, palette=palette_diff, ax=axes[idx],
-                        showmeans=True,
-                        meanprops={"marker": "o", "markerfacecolor": "white", "markeredgecolor": "black"})
-            sns.stripplot(data=df_diff, x='Group', y=metric, order=diff_order, palette=palette_diff, ax=axes[idx],
-                          alpha=0.6, jitter=True, edgecolor='gray', linewidth=0.5)
-
-            axes[idx].set_title(f'{metric}\n(Gender & Difficulty)', fontweight='bold', fontsize=13)
-            axes[idx].set_xlabel('')
-            axes[idx].set_ylabel(metric, fontweight='bold')
-
-            axes[idx].axvline(1.5, color='gray', linestyle=':', alpha=0.7)
-            axes[idx].axvline(3.5, color='gray', linestyle=':', alpha=0.7)
-
-            annotate_wilcoxon_unpaired(axes[idx], df_diff, metric, diff_pairs, diff_order)
-
-    # -----------------------------------------------
-    # Plot Row 3 (axes 8-10): Collisions & Overall Accuracy
-    # -----------------------------------------------
-    # Subplot 8: Phase Collisions
-    if not df_diff_col.empty:
-        sns.boxplot(data=df_diff_col, x='Group', y='Collisions', order=diff_order, palette=palette_diff, ax=axes[8],
-                    showmeans=True, meanprops={"marker": "o", "markerfacecolor": "white", "markeredgecolor": "black"})
-        sns.stripplot(data=df_diff_col, x='Group', y='Collisions', order=diff_order, palette=palette_diff, ax=axes[8],
-                      alpha=0.6, jitter=True, edgecolor='gray', linewidth=0.5)
-
-        axes[8].set_title('Phase Collisions\n(Gender & Difficulty)', fontweight='bold', fontsize=13)
-        axes[8].set_xlabel('')
-        axes[8].set_ylabel('Collisions', fontweight='bold')
-
-        axes[8].axvline(1.5, color='gray', linestyle=':', alpha=0.7)
-        axes[8].axvline(3.5, color='gray', linestyle=':', alpha=0.7)
-
-        annotate_wilcoxon_unpaired(axes[8], df_diff_col, 'Collisions', diff_pairs, diff_order)
-
     gen_order = ['Male', 'Female']
     palette_gen = {'Male': color_palette['male'], 'Female': color_palette['female']}
     gen_pairs = [('Male', 'Female')]
 
-    # Subplot 9: Total Collisions by Gender
+    fig1, axes1 = plt.subplots(2, 2, figsize=(12, 9))
+    axes1 = axes1.flatten()
+    modality_metrics = ['Miss Rate', 'Angular Accuracy', 'Distance Accuracy', 'Total Accuracy']
+    for i, metric in enumerate(modality_metrics):
+        if df_mod.empty or metric not in df_mod.columns:
+            axes1[i].axis('off')
+            continue
+        sns.boxplot(data=df_mod, x='Group', y=metric, order=mod_order, palette=palette_mod, ax=axes1[i], showmeans=True, meanprops={"marker": "o", "markerfacecolor": "white", "markeredgecolor": "black"})
+        sns.stripplot(data=df_mod, x='Group', y=metric, order=mod_order, palette=palette_mod, ax=axes1[i], alpha=0.6, jitter=True, edgecolor='gray', linewidth=0.5)
+        axes1[i].set_title(metric, fontweight='bold', fontsize=13)
+        axes1[i].set_xlabel('')
+        axes1[i].set_ylabel(metric, fontweight='bold')
+        axes1[i].axvline(1.5, color='gray', linestyle=':', alpha=0.7)
+        axes1[i].axvline(3.5, color='gray', linestyle=':', alpha=0.7)
+        annotate_wilcoxon_unpaired(axes1[i], df_mod, metric, mod_pairs, mod_order)
+    fig1.suptitle('Gender Differences: Modality-specific Metrics', fontweight='bold', fontsize=15)
+    fig1.savefig('gender_modality.svg', format='svg', bbox_inches='tight')
+
+    plt.tight_layout()
+    plt.show()
+
+    fig2, axes2 = plt.subplots(1, 5, figsize=(30, 4))
+    difficulty_metrics = ['Miss Rate', 'Angular Accuracy', 'Distance Accuracy', 'Total Accuracy']
+    for i, metric in enumerate(difficulty_metrics):
+        if df_diff.empty or metric not in df_diff.columns:
+            axes2[i].axis('off')
+            continue
+        sns.boxplot(data=df_diff, x='Group', y=metric, order=diff_order, palette=palette_diff, ax=axes2[i], showmeans=True, meanprops={"marker": "o", "markerfacecolor": "white", "markeredgecolor": "black"})
+        sns.stripplot(data=df_diff, x='Group', y=metric, order=diff_order, palette=palette_diff, ax=axes2[i], alpha=0.6, jitter=True, edgecolor='gray', linewidth=0.5)
+        axes2[i].set_title(metric, fontweight='bold', fontsize=13)
+        axes2[i].set_xlabel('')
+        axes2[i].set_ylabel(metric, fontweight='bold')
+        axes2[i].axvline(1.5, color='gray', linestyle=':', alpha=0.7)
+        axes2[i].axvline(3.5, color='gray', linestyle=':', alpha=0.7)
+        annotate_wilcoxon_unpaired(axes2[i], df_diff, metric, diff_pairs, diff_order)
+
+    if not df_diff_col.empty:
+        sns.boxplot(data=df_diff_col, x='Group', y='Collisions', order=diff_order, palette=palette_diff, ax=axes2[4], showmeans=True, meanprops={"marker": "o", "markerfacecolor": "white", "markeredgecolor": "black"})
+        sns.stripplot(data=df_diff_col, x='Group', y='Collisions', order=diff_order, palette=palette_diff, ax=axes2[4], alpha=0.6, jitter=True, edgecolor='gray', linewidth=0.5)
+        axes2[4].set_title('Phase Collisions', fontweight='bold', fontsize=13)
+        axes2[4].set_xlabel('')
+        axes2[4].set_ylabel('Collisions', fontweight='bold')
+        axes2[4].axvline(1.5, color='gray', linestyle=':', alpha=0.7)
+        axes2[4].axvline(3.5, color='gray', linestyle=':', alpha=0.7)
+        annotate_wilcoxon_unpaired(axes2[4], df_diff_col, 'Collisions', diff_pairs, diff_order)
+    else:
+        axes2[4].axis('off')
+
+    fig2.suptitle('Gender Differences: Difficulty-specific Metrics', fontweight='bold', fontsize=15)
+    fig2.savefig('gender_difficulty.svg', format='svg', bbox_inches='tight')
+
+    plt.tight_layout()
+    plt.show()
+
+    fig3, axes3 = plt.subplots(1, 2, figsize=(12, 6))
+
     if not df_tot_col.empty:
-        sns.boxplot(data=df_tot_col, x='Group', y='Total Collisions', order=gen_order, palette=palette_gen, ax=axes[9],
-                    showmeans=True, width=0.4,
-                    meanprops={"marker": "o", "markerfacecolor": "white", "markeredgecolor": "black"})
-        sns.stripplot(data=df_tot_col, x='Group', y='Total Collisions', order=gen_order, palette=palette_gen,
-                      ax=axes[9],
-                      alpha=0.6, jitter=True, edgecolor='gray', linewidth=0.5)
+        sns.boxplot(data=df_tot_col, x='Group', y='Total Collisions', order=gen_order, palette=palette_gen, ax=axes3[0], showmeans=True, width=0.4, meanprops={"marker": "o", "markerfacecolor": "white", "markeredgecolor": "black"})
+        sns.stripplot(data=df_tot_col, x='Group', y='Total Collisions', order=gen_order, palette=palette_gen, ax=axes3[0], alpha=0.6, jitter=True, edgecolor='gray', linewidth=0.5)
+        axes3[0].set_title('Total Collisions', fontweight='bold', fontsize=13)
+        axes3[0].set_xlabel('')
+        axes3[0].set_ylabel('Total Collisions', fontweight='bold')
+        annotate_wilcoxon_unpaired(axes3[0], df_tot_col, 'Total Collisions', gen_pairs, gen_order)
+    else:
+        axes3[0].axis('off')
 
-        axes[9].set_title('Total Collisions\n(by Gender)', fontweight='bold', fontsize=13)
-        axes[9].set_xlabel('')
-        axes[9].set_ylabel('Total Collisions', fontweight='bold')
-
-        annotate_wilcoxon_unpaired(axes[9], df_tot_col, 'Total Collisions', gen_pairs, gen_order)
-
-    # Subplot 10: Overall Total Accuracy by Gender
     if not df_tot.empty:
-        sns.boxplot(data=df_tot, x='Group', y='Total Accuracy', order=gen_order, palette=palette_gen, ax=axes[10],
-                    showmeans=True, width=0.4,
-                    meanprops={"marker": "o", "markerfacecolor": "white", "markeredgecolor": "black"})
-        sns.stripplot(data=df_tot, x='Group', y='Total Accuracy', order=gen_order, palette=palette_gen, ax=axes[10],
-                      alpha=0.6, jitter=True, edgecolor='gray', linewidth=0.5)
+        sns.boxplot(data=df_tot, x='Group', y='Total Accuracy', order=gen_order, palette=palette_gen, ax=axes3[1], showmeans=True, width=0.4, meanprops={"marker": "o", "markerfacecolor": "white", "markeredgecolor": "black"})
+        sns.stripplot(data=df_tot, x='Group', y='Total Accuracy', order=gen_order, palette=palette_gen, ax=axes3[1], alpha=0.6, jitter=True, edgecolor='gray', linewidth=0.5)
+        axes3[1].set_title('Overall Total Accuracy', fontweight='bold', fontsize=13)
+        axes3[1].set_xlabel('')
+        axes3[1].set_ylabel('Total Accuracy', fontweight='bold')
+        annotate_wilcoxon_unpaired(axes3[1], df_tot, 'Total Accuracy', gen_pairs, gen_order)
+    else:
+        axes3[1].axis('off')
 
-        axes[10].set_title('Overall Total Accuracy\n(by Gender)', fontweight='bold', fontsize=13)
-        axes[10].set_xlabel('')
-        axes[10].set_ylabel('Total Accuracy', fontweight='bold')
+    fig3.suptitle('Gender Differences: Overall Metrics', fontweight='bold', fontsize=15)
+    plt.tight_layout()
+    fig3.savefig('gender_total_acc_collision.svg', format='svg', bbox_inches='tight')
 
-        annotate_wilcoxon_unpaired(axes[10], df_tot, 'Total Accuracy', gen_pairs, gen_order)
+    plt.show()
 
-    # Clean up empty subplots
-    if standalone:
-        fig.delaxes(axes[11])  # Remove the 12th slot
-
-        plt.tight_layout(pad=2.0)
-        plt.show()
-
-
-
+    return {
+        'modality_metrics': df_mod,
+        'difficulty_metrics': df_diff,
+        'difficulty_collisions': df_diff_col,
+        'overall_collisions': df_tot_col,
+        'overall_accuracy': df_tot,
+    }
 
 
 def plot_gender_differences(perception_results_all, demo_df):
@@ -2820,6 +1637,7 @@ def plot_modality_spider_chart(perception_results_all, color_palette, save_path=
     if save_path:
         plt.savefig(save_path, dpi=300, bbox_inches='tight', format=save_path.split('.')[-1])
         print(f"Figure saved to {save_path}")
+    plt.savefig('modality_spider.svg', format='svg', bbox_inches='tight')
 
     plt.show()
 
@@ -3314,12 +2132,15 @@ def plot_performance_and_polar_accuracy(perception_results_all, experiment_logs_
     fig.legend(handles=legend_handles, loc="upper center", ncol=3, frameon=False, fontsize=15, bbox_to_anchor=(0.5, 1.005))
 
 
-    fig.savefig('across_modality.pdf', format='pdf', bbox_inches='tight')
+    fig.savefig('modality_performance_polar_acc.svg', format='svg', bbox_inches='tight')
 
     if standalone:
         # fig.suptitle("Perception Performance by Feedback Modality", fontsize=16, fontweight="bold", y=1.01)
         plt.tight_layout(rect=[0, 0, 1, 0.92])
         plt.show()
+
+
+
 
 
 def print_extreme_participants(perception_results_all, experiment_logs_all, demographics_path):
@@ -3671,8 +2492,9 @@ def plot_modality_difficulty_performance_matrices(perception_results_all, color_
     axes[1].set_ylabel('')
 
     fig.suptitle('Condition-Level Performance Landscape', fontsize=13, fontweight='bold')
+    fig.savefig('modality_difficulty_conf_mat.svg', format='svg', bbox_inches='tight')
+
     plt.show()
-    fig.savefig('thesis_plot_1_performance_matrices.pdf', format='pdf', bbox_inches='tight')
 
     return {
         'subject_level': summary,
@@ -3680,6 +2502,7 @@ def plot_modality_difficulty_performance_matrices(perception_results_all, color_
         'accuracy_matrix': acc_mat,
         'miss_matrix': miss_mat
     }
+
 
 
 def plot_efficiency_frontier_by_modality(perception_results_all, experiment_logs_all, color_palette):
@@ -3715,7 +2538,7 @@ def plot_efficiency_frontier_by_modality(perception_results_all, experiment_logs
 
         acc_by_mod = valid_df.groupby('Modality')['Is_Correct'].mean() * 100
 
-        collision_df = extract_collision_modality(logs_df, dfc, start_offset=2, duration=2)
+        collision_df = extract_collision_modality(logs_df, dfc, start_offset=2, end_offset=2)
         if collision_df.empty:
             continue
 
@@ -3878,11 +2701,11 @@ def plot_spatial_error_landscape(perception_results_all, color_palette):
     return pivots
 
 
-def plot_workload_vs_accuracy_by_difficulty(perception_results_all, experiment_logs_all, color_palette):
+def     plot_workload_vs_accuracy_by_difficulty(perception_results_all, experiment_logs_all, color_palette):
     """
     Tests whether workload proxies explain performance drops:
       - Subplot A: Accuracy vs collisions-per-second
-      - Subplot B: Accuracy vs joystick effort
+      - Subplot B: Accuracy vs joystick variance
     Each point is participant x difficulty.
     """
     records = []
@@ -3930,18 +2753,19 @@ def plot_workload_vs_accuracy_by_difficulty(perception_results_all, experiment_l
             duration = max(1e-6, l_phase['Timestamp'].max() - l_phase['Timestamp'].min())
             collision_rate = (l_phase['Number of collision'].max() - l_phase['Number of collision'].min()) / duration
 
+            # Use Magnitude Variance for Joystick
             if 'Thumbstick x' in l_phase.columns and 'Thumbstick y' in l_phase.columns:
-                joystick_effort = l_phase['Thumbstick x'].diff().abs().sum() + l_phase['Thumbstick y'].diff().abs().sum()
-                joystick_effort = joystick_effort / max(1, len(l_phase))
+                magnitude = np.sqrt(l_phase['Thumbstick x']**2 + l_phase['Thumbstick y']**2)
+                joystick_var = magnitude.var()
             else:
-                joystick_effort = np.nan
+                joystick_var = np.nan
 
             records.append({
                 'Participant ID': subject_id,
                 'Difficulty': diff,
                 'Accuracy (%)': accuracy,
                 'Collision rate (per sec)': collision_rate,
-                'Joystick effort (normalized)': joystick_effort
+                'Joystick variance': joystick_var
             })
 
     plot_df = pd.DataFrame(records)
@@ -3976,7 +2800,7 @@ def plot_workload_vs_accuracy_by_difficulty(perception_results_all, experiment_l
 
         sns.regplot(
             data=sub,
-            x='Joystick effort (normalized)',
+            x='Joystick variance',
             y='Accuracy (%)',
             ax=axes[1],
             scatter_kws={'s': 45, 'alpha': 0.65, 'color': diff_palette[diff], 'edgecolor': 'black'},
@@ -3994,8 +2818,8 @@ def plot_workload_vs_accuracy_by_difficulty(perception_results_all, experiment_l
     axes[0].set_xlabel('Collision rate (collisions/sec)')
     axes[0].set_ylabel('Total Accuracy (%)')
 
-    axes[1].set_title('Accuracy vs Joystick Effort', fontweight='bold')
-    axes[1].set_xlabel('Joystick effort (mean |Δx|+|Δy| per sample)')
+    axes[1].set_title('Accuracy vs Joystick Variance', fontweight='bold')
+    axes[1].set_xlabel('Joystick variance (magnitude $r^2$)')
     axes[1].set_ylabel('Total Accuracy (%)')
 
     axes[1].legend(handles=legend_handles, title='Difficulty', frameon=True, loc='best')
@@ -4008,24 +2832,25 @@ def plot_workload_vs_accuracy_by_difficulty(perception_results_all, experiment_l
         else:
             rho_col, p_col = np.nan, np.nan
 
-        sub2 = plot_df[plot_df['Difficulty'] == diff].dropna(subset=['Accuracy (%)', 'Joystick effort (normalized)'])
+        sub2 = plot_df[plot_df['Difficulty'] == diff].dropna(subset=['Accuracy (%)', 'Joystick variance'])
         if len(sub2) > 2:
-            rho_eff, p_eff = spearmanr(sub2['Joystick effort (normalized)'], sub2['Accuracy (%)'])
+            rho_var, p_var = spearmanr(sub2['Joystick variance'], sub2['Accuracy (%)'])
         else:
-            rho_eff, p_eff = np.nan, np.nan
+            rho_var, p_var = np.nan, np.nan
 
         corr_rows.append({
             'Difficulty': diff,
             'rho(accuracy, collision_rate)': rho_col,
             'p_collision': p_col,
-            'rho(accuracy, joystick_effort)': rho_eff,
-            'p_joystick': p_eff
+            'rho(accuracy, joystick_variance)': rho_var,
+            'p_joystick': p_var
         })
 
     corr_df = pd.DataFrame(corr_rows)
 
+    # Save BEFORE showing to avoid blank PDFs/SVGs
+    fig.savefig('difficulty_specific_acc_vs_coll_joystick.svg', format='svg', bbox_inches='tight')
     plt.show()
-    fig.savefig('thesis_plot_5_workload_vs_accuracy.pdf', format='pdf', bbox_inches='tight')
 
     print('\n=== Workload vs Accuracy correlations by difficulty (Spearman) ===')
     print(corr_df.to_string(index=False))
@@ -4034,7 +2859,5 @@ def plot_workload_vs_accuracy_by_difficulty(perception_results_all, experiment_l
         'point_data': plot_df,
         'correlations': corr_df
     }
-
-
 
 
