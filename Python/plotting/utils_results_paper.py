@@ -793,30 +793,9 @@ def analyze_attention_redistribution(perception_results_all, experiment_logs_all
     return metrics_df, modality_metrics_df
 
 
-def difficulty_specific_redistribution(perception_results_all, experiment_logs_all, demographics, color_palette):
-    metrics_df, _ = analyze_attention_redistribution(perception_results_all, experiment_logs_all, demographics)
-    if metrics_df.empty:
-        print('No valid data found for difficulty_specific_redistribution.')
-        return None
 
-    difficulty_order = ['easy', 'medium', 'hard']
-    metrics_to_plot = ['Accuracy', 'Polar Accuracy', 'Miss Rate', 'Reaction Time', 'Collisions', 'Joystick Variance', 'Head Variance']
 
-    sns.set_theme(style='whitegrid', context='paper', font_scale=1.0)
-    fig, axes = plt.subplots(2, 4, figsize=(20, 9), sharex=True)
-    axes = axes.flatten()
 
-    for i, metric in enumerate(metrics_to_plot):
-        sns.pointplot(data=metrics_df, x='Difficulty', y=metric, order=difficulty_order, errorbar=('ci', 95), capsize=0.1, color=color_palette.get('total', '#2205d1'), ax=axes[i])
-        axes[i].set_title(metric, fontweight='bold')
-        axes[i].set_xlabel('Difficulty')
-        axes[i].set_ylabel(metric)
-
-    axes[7].axis('off')
-    fig.suptitle('Difficulty-Specific Redistribution Metrics', fontsize=15, fontweight='bold')
-    plt.tight_layout()
-    plt.show()
-    return metrics_df
 
 
 def difficulty_modality_specific_redistribution(perception_results_all, experiment_logs_all, demographics, color_palette):

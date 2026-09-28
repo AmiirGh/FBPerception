@@ -963,7 +963,7 @@ def plot_unified_performance_correlations(perception_results_all, experiment_log
         ax.spines["bottom"].set_color("black")
     # Finalize
     fig.tight_layout()
-    fig.savefig('metacognition.svg', format='svg', bbox_inches='tight')
+    fig.savefig('modality_questionnaire.svg', format='svg', bbox_inches='tight')
     plt.show()
 
     corr_df = pd.DataFrame(correlation_records)
@@ -1037,7 +1037,260 @@ def print_questionnaire_stats_and_pvalue(df_questionnaire_final):
         else:
             print("Not enough valid paired data to perform statistical tests.")
 
+def plot_questionnaire_mid(df_questionnaire_mid, color_palette):
+    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
 
+    phases = ['Phase 1', 'Phase 2', 'Phase 3']
+    phase_cols = [1, 2, 3]
+
+    def add_p_values(ax, columns, colors, y_step=0.12):
+        pairs = [(1, 2), (1, 3), (2, 3)]
+        y_min, y_max = ax.get_ylim()
+        y_range = y_max - y_min
+        significant_count = 0
+
+        for modality_idx, ((label, q), color) in enumerate(zip(columns, colors)):
+            for p1, p2 in pairs:
+                data1 = pd.to_numeric(df_questionnaire_mid[f'{q}.{p1}'], errors='coerce')
+                data2 = pd.to_numeric(df_questionnaire_mid[f'{q}.{p2}'], errors='coerce')
+
+                valid = data1.notna() & data2.notna()
+
+                if valid.sum() < 2:
+                    continue
+
+                try:
+                    p_value = wilcoxon(data1[valid], data2[valid]).pvalue
+                except ValueError:
+                    continue
+
+                if p_value >= 0.05:
+                    continue
+
+                x1 = phase_cols.index(p1)
+                x2 = phase_cols.index(p2)
+
+                y = y_max + (significant_count + 1) * y_range * y_step
+                h = y_range * 0.025
+                significant_count += 1
+
+                ax.plot(
+                    [x1, x1, x2, x2],
+                    [y, y + h, y + h, y],
+                    color=color,
+                    linewidth=1.5
+                )
+
+                p_text = 'p < 0.001' if p_value < 0.001 else f'p = {p_value:.3f}'
+
+                ax.text(
+                    (x1 + x2) / 2,
+                    y + h,
+                    p_text,
+                    ha='center',
+                    va='bottom',
+                    fontsize=9,
+                    color=color,
+                    fontweight='bold'
+                )
+
+        if significant_count:
+            ax.set_ylim(
+                y_min,
+                y_max + y_range * y_step * (significant_count + 2)
+            )
+
+    # Subplot 0: Fatigue and nausea
+    data_0 = []
+    for i, phase in zip(phase_cols, phases):
+        for q, label in [('Q1', 'Fatigue'), ('Q2', 'Nausea')]:
+            data_0.extend([
+                (phase, label, x)
+                for x in df_questionnaire_mid[f'{q}.{i}'].dropna()
+            ])
+
+    data_0 = pd.DataFrame(data_0, columns=['Phase', 'Measure', 'Value'])
+
+    sns.pointplot(
+        data=data_0, x='Phase', y='Value', hue='Measure',
+        errorbar='se', dodge=0.15, ax=axes[0, 0]
+    )
+
+    axes[0, 0].set_title('Fatigue and Nausea')
+    axes[0, 0].set_xlabel('')
+    axes[0, 0].set_ylabel('Level')
+
+    colors_0 = [
+        axes[0, 0].get_lines()[0].get_color(),
+        axes[0, 0].get_lines()[1].get_color()
+    ]
+
+    add_p_values(
+        axes[0, 0],
+        [('Fatigue', 'Q1'), ('Nausea', 'Q2')],
+        colors_0
+    )
+
+    # Subplot 1: Most useful cue
+    cue_counts = []
+
+    for i, phase in zip(phase_cols, phases):
+        responses = (
+            df_questionnaire_mid[f'Q3.{i}']
+            .dropna()
+            .astype(str)
+            .str.split(',')
+            .str[0]
+            .str.strip()
+            .str.lower()
+        )
+
+        counts = responses.value_counts()
+        total = counts.sum()
+
+        cue_counts.append({
+            'Phase': phase,
+            'visual': counts.get('v', 0) / total * 100,
+            'auditory': counts.get('a', 0) / total * 100,
+            'haptic': counts.get('h', 0) / total * 100
+        })
+
+    cue_counts = pd.DataFrame(cue_counts).set_index('Phase')
+    bottom = pd.Series(0.0, index=cue_counts.index)
+
+    for cue in ['visual', 'auditory', 'haptic']:
+        axes[0, 1].bar(
+            cue_counts.index,
+            cue_counts[cue],
+            bottom=bottom,
+            label=cue.capitalize(),
+            color=color_palette[cue]
+        )
+        bottom += cue_counts[cue]
+
+    axes[0, 1].set_title('Most Useful Cue')
+    axes[0, 1].set_ylabel('Percentage (%)')
+    axes[0, 1].set_xlabel('')
+    axes[0, 1].legend()
+
+    # Subplot 2: Confusion
+    data_2 = []
+
+    for i, phase in zip(phase_cols, phases):
+        for q, modality in [('Q4', 'Visual'), ('Q5', 'Auditory'), ('Q6', 'Haptic')]:
+            data_2.extend([
+                (phase, modality, x)
+                for x in df_questionnaire_mid[f'{q}.{i}'].dropna()
+            ])
+
+    data_2 = pd.DataFrame(data_2, columns=['Phase', 'Modality', 'Value'])
+
+    sns.pointplot(
+        data=data_2, x='Phase', y='Value', hue='Modality',
+        errorbar='se', dodge=0.2,
+        palette=[
+            color_palette['visual'],
+            color_palette['auditory'],
+            color_palette['haptic']
+        ],
+        ax=axes[1, 0]
+    )
+
+    axes[1, 0].set_title('Confusion')
+    axes[1, 0].set_xlabel('')
+    axes[1, 0].set_ylabel('Level')
+
+    add_p_values(
+        axes[1, 0],
+        [('Visual', 'Q4'), ('Auditory', 'Q5'), ('Haptic', 'Q6')],
+        [
+            color_palette['visual'],
+            color_palette['auditory'],
+            color_palette['haptic']
+        ]
+    )
+
+    # Subplot 3: Perception speed
+    data_3 = []
+
+    for i, phase in zip(phase_cols, phases):
+        for q, modality in [('Q7', 'Visual'), ('Q8', 'Auditory'), ('Q9', 'Haptic')]:
+            data_3.extend([
+                (phase, modality, x)
+                for x in df_questionnaire_mid[f'{q}.{i}'].dropna()
+            ])
+
+    data_3 = pd.DataFrame(data_3, columns=['Phase', 'Modality', 'Value'])
+
+    sns.pointplot(
+        data=data_3, x='Phase', y='Value', hue='Modality',
+        errorbar='se', dodge=0.2,
+        palette=[
+            color_palette['visual'],
+            color_palette['auditory'],
+            color_palette['haptic']
+        ],
+        ax=axes[1, 1]
+    )
+
+    axes[1, 1].set_title('Perception Speed')
+    axes[1, 1].set_xlabel('')
+    axes[1, 1].set_ylabel('Speed Level')
+
+    add_p_values(
+        axes[1, 1],
+        [('Visual', 'Q7'), ('Auditory', 'Q8'), ('Haptic', 'Q9')],
+        [
+            color_palette['visual'],
+            color_palette['auditory'],
+            color_palette['haptic']
+        ]
+    )
+    plt.savefig('questionnaire_mid.svg', format='svg', bbox_inches='tight')
+
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_questionnaire_final(df_questionnaire_final):
+
+
+    questions = ['Q1', 'Q2', 'Q6', 'Q8', 'Q13', 'Q15', 'Q16']
+    labels = [
+        'Mental workload',
+        'Physical fatigue',
+        'Effort to improve performance',
+        'Coordination over time',
+        'Immersion',
+        'Obstacle avoidance',
+        'Cue localization'
+    ]
+
+    data = []
+    for q, label in zip(questions, labels):
+        for value in df_questionnaire_final[q].dropna():
+            data.append((label, value))
+
+    plt.figure(figsize=(10, 5))
+    ax = sns.boxplot(
+        x=[x[0] for x in data],
+        y=[x[1] for x in data],
+        palette=sns.color_palette('tab10', len(questions)),
+        width=0.55
+    )
+
+    ax.set_xlabel('')
+    ax.set_ylabel('Response')
+    ax.set_xticklabels(labels, rotation=20, ha='right')
+    ax.set_title('Final Questionnaire Responses')
+    ax.set_ylim(0, 6)
+    ax.set_yticks([i for i in range(0, 6)])
+    ax.grid(axis='y', linestyle='--', alpha=0.5)
+
+    plt.savefig('questionnaire_final.svg', format='svg', bbox_inches='tight')
+
+    plt.tight_layout()
+    plt.show()
 
 
 

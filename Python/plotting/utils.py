@@ -1157,9 +1157,142 @@ def plot_unified_tradeoffs(perception_results_all, experiment_logs_all):
     plt.show()
 
 
+def plot_combined_tradeoffs(perception_results_all, experiment_logs_all):
+    """
+    Combines:
+    1. Total Misses vs Total Errors
+    2. Total Accuracy vs Total Collisions
+    3. Total Misses vs Total Collisions
+    into a single 1x3 subplot grid.
+    """
+    fig, axes = plt.subplots(1, 3, figsize=(18, 5.5))
+    props = dict(boxstyle='round', facecolor='white', alpha=0.8, edgecolor='gray')
 
+    # =========================================================================
+    # 1. Total Errors vs Total Misses -> axes[0]
+    # =========================================================================
+    stats_list_err = []
+    for subject_name, df in perception_results_all.items():
+        if df is None or df.empty:
+            continue
 
+        # Filter out invalid trials (-1)
+        df_filtered = df[(df['Perceived angle'] != -1) & (df['Perceived distance'] != -1)]
 
+        # Handle potential typo in column names based on your original script
+        dist_col = 'Distance' if 'Distance' in df_filtered.columns else 'Distnce'
+
+        # Count Misses (where perceived is strictly 0)
+        misses = ((df_filtered['Perceived angle'] == 0) | (df_filtered['Perceived distance'] == 0)).sum()
+
+        # Count Errors (where perceived does not match the actual stimuli)
+        errors = ((df_filtered['Angle'] != df_filtered['Perceived angle']) |
+                  (df_filtered[dist_col] != df_filtered['Perceived distance'])).sum()
+
+        stats_list_err.append({'Total Misses': misses, 'Total Errors': errors})
+
+    df_err = pd.DataFrame(stats_list_err)
+    if not df_err.empty and len(df_err) > 1:
+        r_err, _ = stats.pearsonr(df_err['Total Errors'], df_err['Total Misses'])
+
+        sns.regplot(data=df_err, x='Total Errors', y='Total Misses', ax=axes[0],
+                    scatter_kws={'s': 60, 'alpha': 0.8, 'color': '#9467bd'},
+                    line_kws={'color': '#d62728', 'linewidth': 2})
+
+        axes[0].text(0.05, 0.95, f'Pearson r = {r_err:.3f}', transform=axes[0].transAxes,
+                     fontsize=12, verticalalignment='top', bbox=props, fontweight='bold')
+
+    axes[0].set_title('Errors vs. Perception Misses', fontsize=13, fontweight='bold')
+    axes[0].set_xlabel('Total Errors', fontsize=11, fontweight='bold')
+    axes[0].set_ylabel('Total Misses', fontsize=11, fontweight='bold')
+    axes[0].grid(True, linestyle='--', alpha=0.5)
+
+    # =========================================================================
+    # 2. Total Accuracy vs Total Collisions -> axes[1]
+    # =========================================================================
+    stats_list_tot = []
+    for subject_name, perc_df in perception_results_all.items():
+        log_df = experiment_logs_all.get(subject_name)
+        if perc_df is None or perc_df.empty or log_df is None or log_df.empty:
+            continue
+
+        df_filtered = perc_df[(perc_df['Perceived angle'] > 0) & (perc_df['Perceived distance'] > 0)]
+        if df_filtered.empty:
+            continue
+
+        dist_col = 'Distance' if 'Distance' in df_filtered.columns else 'Distnce'
+
+        total_correct = ((df_filtered['Angle'] == df_filtered['Perceived angle']) &
+                         (df_filtered[dist_col] == df_filtered['Perceived distance'])).sum()
+        accuracy_pct = (total_correct / len(df_filtered)) * 100
+
+        log_df_copy = log_df.copy()
+        if 'Number of collision' in log_df_copy.columns:
+            log_df_copy['Number of collision'] = pd.to_numeric(log_df_copy['Number of collision'], errors='coerce')
+            total_collisions = log_df_copy['Number of collision'].max() - log_df_copy['Number of collision'].min()
+            stats_list_tot.append({'Total Accuracy (%)': accuracy_pct, 'Total Collisions': total_collisions})
+
+    df_tot = pd.DataFrame(stats_list_tot)
+    if not df_tot.empty and len(df_tot) > 1:
+        r_tot, p_tot = stats.pearsonr(df_tot['Total Accuracy (%)'], df_tot['Total Collisions'])
+
+        sns.regplot(data=df_tot, x='Total Accuracy (%)', y='Total Collisions', ax=axes[1],
+                    scatter_kws={'s': 60, 'alpha': 0.8, 'color': '#1f77b4'},
+                    line_kws={'color': '#d62728', 'linewidth': 2})
+
+        stats_text = f'Pearson r = {r_tot:.2f}\np-value = {p_tot:.3f}'
+        axes[1].text(0.05, 0.95, stats_text, transform=axes[1].transAxes, fontsize=12,
+                     verticalalignment='top', bbox=props, fontweight='bold')
+
+    axes[1].set_title('Overall: Total Accuracy vs. Collisions', fontsize=13, fontweight='bold')
+    axes[1].set_xlabel('Total Accuracy (%)', fontsize=11, fontweight='bold')
+    axes[1].set_ylabel('Total Collisions', fontsize=11, fontweight='bold')
+    axes[1].grid(True, linestyle='--', alpha=0.5)
+
+    # =========================================================================
+    # 3. Total Misses vs Total Collisions -> axes[2]
+    # =========================================================================
+    stats_list_misses = []
+    for subject_name, perc_df in perception_results_all.items():
+        log_df = experiment_logs_all.get(subject_name)
+        if perc_df is None or perc_df.empty or log_df is None or log_df.empty:
+            continue
+
+        df_filtered = perc_df[(perc_df['Perceived angle'] != -1) & (perc_df['Perceived distance'] != -1)]
+        misses = ((df_filtered['Perceived angle'] == 0) | (df_filtered['Perceived distance'] == 0)).sum()
+
+        if 'Number of collision' not in log_df.columns:
+            continue
+
+        log_df_copy = log_df.copy()
+        log_df_copy['Number of collision'] = pd.to_numeric(log_df_copy['Number of collision'], errors='coerce')
+        total_collisions = log_df_copy['Number of collision'].max() - log_df_copy['Number of collision'].min()
+
+        if not pd.isna(total_collisions):
+            stats_list_misses.append({'Total Misses': misses, 'Total Collisions': total_collisions})
+
+    df_misses = pd.DataFrame(stats_list_misses)
+    if not df_misses.empty and len(df_misses) > 1:
+        r_misses, _ = stats.pearsonr(df_misses['Total Misses'], df_misses['Total Collisions'])
+
+        sns.regplot(data=df_misses, x='Total Misses', y='Total Collisions', ax=axes[2],
+                    scatter_kws={'s': 60, 'alpha': 0.8, 'color': '#2ca02c'},
+                    line_kws={'color': '#d62728', 'linewidth': 2})
+
+        axes[2].text(0.05, 0.95, f'Pearson r = {r_misses:.2f}', transform=axes[2].transAxes,
+                     fontsize=12, verticalalignment='top', bbox=props, fontweight='bold')
+
+    axes[2].set_title('Overall: Perception Misses vs. Collisions', fontsize=13, fontweight='bold')
+    axes[2].set_xlabel('Total Misses (Perceived == 0)', fontsize=11, fontweight='bold')
+    axes[2].set_ylabel('Total Collisions', fontsize=11, fontweight='bold')
+    axes[2].grid(True, linestyle='--', alpha=0.5)
+
+    # =========================================================================
+    # Final Adjustments and Display
+    # =========================================================================
+    plt.tight_layout(pad=2.0)
+    plt.savefig('others_combined_tradeoffs.svg', format='svg', bbox_inches='tight')
+    plt.show()
 
 
 
@@ -1543,11 +1676,289 @@ def plot_multivariate_joystick(df):
 
 
 
+def difficulty_specific_redistribution(perception_results_all, experiment_logs_all, demographics):
+    metrics_df, modality_df = _calculate_difficulty_metrics(perception_results_all, experiment_logs_all, demographics)
+
+    metrics = ["Accuracy", "Polar Accuracy", "Miss Rate", "Reaction Time", "Collisions", "Joystick Variance", "Head Variance",
+               "Distance Accuracy", "Angular Accuracy"]
+    comparisons = [("easy", "medium"), ("medium", "hard"), ("easy", "hard")]
+
+    fig, axes = plt.subplots(3, 3, figsize=(12, 9))
+    axes = axes.flatten()
+    stats_list = []
+
+    ylim_settings = {
+        "Accuracy": (60, 100),
+        "Polar Accuracy": (60, 100),
+        "Angular Accuracy": (60, 100),
+        "Distance Accuracy": (60, 100),
+        "Miss Rate": (0, 10),
+        "Reaction Time": (2, 3),
+        "Collisions": (0, 500),
+        "Joystick Variance":(0, 0.5),
+        "Head Variance": (0, 20)
+    }
+
+    xlim_settings = (-0.5, 2.5)
+
+    for i, metric in enumerate(metrics):
+        stats_df = _plot_metric(
+            axes[i],
+            metrics_df,
+            metric, metric,
+            sns.color_palette("tab10")[i], comparisons,
+            False,
+            custom_ylim = ylim_settings.get(metric),
+            custom_xlim = xlim_settings
+        )
+        stats_list.append(stats_df)
+
+    # axes[-1].axis("off")
+    fig.suptitle("Difficulty-Specific Attention Redistribution", fontsize=15, y=1.02)
+    fig.tight_layout()
+    plt.savefig("difficulty_specific_redistribution.svg", format="svg", bbox_inches="tight")
+    plt.show()
+
+    stats_df = pd.concat(stats_list, ignore_index=True)
+    print("\nOverall metric Wilcoxon tests:")
+    print(stats_df.to_string(index=False))
+    return metrics_df, stats_df
+
+
+def _calculate_difficulty_metrics(perception_results_all, experiment_logs_all, demographics):
+    difficulty_order = ["easy", "medium", "hard"]
+    modality_order = ["Visual", "Auditory", "Haptic"]
+
+    participant_gender_map = dict(zip(demographics["Participant ID"].astype(str).str.strip().str.zfill(2), demographics["Gender"].astype(str).str.strip().str.lower()))
+
+    metrics_list = []
+    modality_list = []
+
+    for subject_id, trials_df in perception_results_all.items():
+        logs_df = experiment_logs_all.get(subject_id)
+        if trials_df is None or logs_df is None:
+            continue
+
+        participant_gender = participant_gender_map.get(str(subject_id).zfill(2), np.nan)
+
+        for difficulty in difficulty_order:
+            phase_trials = trials_df.loc[trials_df["Difficulty level"] == difficulty].copy()
+            phase_logs = logs_df.loc[logs_df["Difficulty level"] == difficulty].copy()
+
+            angle = pd.to_numeric(phase_trials["Perceived angle"], errors="coerce")
+            distance = pd.to_numeric(phase_trials["Perceived distance"], errors="coerce")
+
+            invalid = angle.eq(-1) | distance.eq(-1)
+            missed = ~invalid & angle.eq(0)
+            valid = ~invalid & angle.gt(0) & distance.gt(0)
+
+            valid_trials = phase_trials.loc[valid]
+            actual_angle = pd.to_numeric(valid_trials["Angle"], errors="coerce")
+            actual_distance = pd.to_numeric(valid_trials["Distance"], errors="coerce")
+            perceived_angle = pd.to_numeric(valid_trials["Perceived angle"], errors="coerce")
+            perceived_distance = pd.to_numeric(valid_trials["Perceived distance"], errors="coerce")
+
+            correct = actual_angle.eq(perceived_angle) & actual_distance.eq(perceived_distance)
+            accuracy = correct.mean() * 100 if len(valid_trials) else np.nan
+
+            angular_correct = actual_angle.eq(perceived_angle)
+            angular_accuracy = angular_correct.mean() * 100 if len(valid_trials) else np.nan
+
+            distance_correct = actual_distance.eq(perceived_distance)
+            distance_accuracy = distance_correct.mean() * 100 if len(valid_trials) else np.nan
+
+            theta_true = actual_angle * (np.pi / 4)
+            theta_perc = perceived_angle * (np.pi / 4)
+            squared_error = actual_distance**2 + perceived_distance**2 - 2 * actual_distance * perceived_distance * np.cos(theta_true - theta_perc)
+            geom_error = np.sqrt(np.maximum(squared_error, 0))
+
+            r_max = max(actual_distance.max(), perceived_distance.max()) if len(valid_trials) else np.nan
+
+            if pd.isna(r_max) or r_max <= 0:
+                polar_accuracy = np.nan
+            else:
+                polar_accuracy = (1 - geom_error / (2 * r_max)).clip(0, 1).mean() * 100
+
+            n_missed = int(missed.sum())
+            n_valid = int(valid.sum())
+            n_analyzable = n_missed + n_valid
+            miss_rate = n_missed / n_analyzable * 100 if n_analyzable else np.nan
+
+            response_start = pd.to_numeric(phase_trials["Response start"], errors="coerce")
+            phase_timestamp = pd.to_numeric(phase_trials["Phase timestamp"], errors="coerce")
+            valid_rt = response_start.gt(0)
+            avg_rt = (response_start[valid_rt] - phase_timestamp[valid_rt]).mean() if valid_rt.any() else np.nan
+
+            collision_values = pd.to_numeric(phase_logs["Number of collision"], errors="coerce").dropna()
+            collisions = collision_values.iloc[-1] - collision_values.iloc[0] if len(collision_values) >= 2 else np.nan
+
+            joystick_var = pd.to_numeric(phase_logs["Thumbstick x"], errors="coerce").var()
+            head_x = phase_logs["Head rotation"].astype(str).str.strip("()").str.split(",", expand=True)[0]
+            head_var = pd.to_numeric(head_x, errors="coerce").var()
+
+            metrics_list.append({
+                "Subject": subject_id, "Gender": participant_gender, "Difficulty": difficulty,
+                "Accuracy": accuracy, "Polar Accuracy": polar_accuracy, "Miss Rate": miss_rate,
+                "Reaction Time": avg_rt, "Collisions": collisions,
+                "Joystick Variance": joystick_var, "Head Variance": head_var,
+                "Missed Trials": n_missed, "Valid Response Trials": n_valid,
+                "Invalidated Trials": int(invalid.sum()), "Analyzable Trials": n_analyzable,
+                "Angular Accuracy": angular_accuracy, "Distance Accuracy": distance_accuracy,
+            })
+
+            for modality in modality_order:
+                modality_trials = phase_trials.loc[phase_trials["Modality"].astype(str).str.strip().str.lower() == modality.lower()].copy()
+
+                mod_angle = pd.to_numeric(modality_trials["Perceived angle"], errors="coerce")
+                mod_distance = pd.to_numeric(modality_trials["Perceived distance"], errors="coerce")
+
+                mod_invalid = mod_angle.eq(-1) | mod_distance.eq(-1)
+                mod_missed = ~mod_invalid & mod_angle.eq(0)  # <--- فقط شرط زاویه باقی ماند
+                mod_valid = ~mod_invalid & mod_angle.gt(0) & mod_distance.gt(0)
+
+                mod_valid_trials = modality_trials.loc[mod_valid]
+
+                mod_actual_angle = pd.to_numeric(mod_valid_trials["Angle"], errors="coerce")
+                mod_actual_distance = pd.to_numeric(mod_valid_trials["Distance"], errors="coerce")
+                mod_perceived_angle = pd.to_numeric(mod_valid_trials["Perceived angle"], errors="coerce")
+                mod_perceived_distance = pd.to_numeric(mod_valid_trials["Perceived distance"], errors="coerce")
+
+                mod_correct = mod_actual_angle.eq(mod_perceived_angle) & mod_actual_distance.eq(mod_perceived_distance)
+                mod_accuracy = mod_correct.mean() * 100 if len(mod_valid_trials) else np.nan
+
+                mod_angular_correct = mod_actual_angle.eq(mod_perceived_angle)
+                mod_angular_accuracy = mod_angular_correct.mean() * 100 if len(mod_valid_trials) else np.nan
+
+                mod_distance_correct = mod_actual_distance.eq(mod_perceived_distance)
+                mod_distance_accuracy = mod_distance_correct.mean() * 100 if len(mod_valid_trials) else np.nan
+
+                mod_theta_true = mod_actual_angle * (np.pi / 4)
+                mod_theta_perc = mod_perceived_angle * (np.pi / 4)
+
+                mod_squared_error = (
+                    mod_actual_distance**2
+                    + mod_perceived_distance**2
+                    - 2 * mod_actual_distance * mod_perceived_distance
+                    * np.cos(mod_theta_true - mod_theta_perc)
+                )
+
+                mod_geom_error = np.sqrt(np.maximum(mod_squared_error, 0))
+
+                mod_r_max = max(mod_actual_distance.max(), mod_perceived_distance.max())
+
+                mod_polar_accuracy = ((1 - mod_geom_error / (2 * mod_r_max)).clip(0, 1).mean() * 100)
+
+                mod_n_missed = int(mod_missed.sum())
+                mod_n_valid = int(mod_valid.sum())
+                mod_n_analyzable = mod_n_missed + mod_n_valid
+                mod_miss_rate = mod_n_missed / mod_n_analyzable * 100 if mod_n_analyzable else np.nan
+
+                modality_list.append({
+                    "Subject": subject_id, "Gender": participant_gender, "Difficulty": difficulty,
+                    "Modality": modality, "Accuracy": mod_accuracy, "Miss Rate": mod_miss_rate,
+                    "Missed Trials": mod_n_missed, "Valid Response Trials": mod_n_valid,
+                    "Invalidated Trials": int(mod_invalid.sum()), "Analyzable Trials": mod_n_analyzable,
+                    "Polar Accuracy": mod_polar_accuracy,
+                    "Angular Accuracy": mod_angular_accuracy, "Distance Accuracy": mod_distance_accuracy,
+                })
+
+    return pd.DataFrame(metrics_list), pd.DataFrame(modality_list)
 
 
 
+def _plot_metric(ax, df, value_col, title, color, comparisons, normalize=True, custom_ylim=None, custom_xlim=None):
+    plot_df = df.copy()
+    plot_df["Plot Value"] = _normalize_metric(plot_df, value_col) if normalize else plot_df[value_col]
+    ylabel = "Normalized value (Z-score)" if normalize else "Accuracy / Miss rate (%)"
+
+    plot_df["Difficulty"] = pd.Categorical(plot_df["Difficulty"], categories=["easy", "medium", "hard"], ordered=True)
+
+    sns.pointplot(data=plot_df, x="Difficulty", y="Plot Value", order=["easy", "medium", "hard"], errorbar=("ci", 95), capsize=0.05, color=color, ax=ax)
+
+    ax.set_title(title, fontsize=11)
+    ax.set_xlabel("Difficulty")
+    ax.set_ylabel(ylabel)
+    ax.grid(True, alpha=0.3)
+
+    stats_df = _paired_wilcoxon(df, value_col, comparisons)
+    y_max = plot_df["Plot Value"].max()
+    y_min = plot_df["Plot Value"].min()
 
 
+    if custom_ylim:
+        y_bottom, y_top = custom_ylim
+    else:
+        y_range_calc = max(y_max - y_min, 1)
+        y_bottom = min(y_min - 0.1 * y_range_calc, 0)
+        y_top = y_max + 0.15 * y_range_calc + len(stats_df) * 0.25 * y_range_calc
+
+    max_data_height = min(y_max, y_bottom + (y_top - y_bottom) * 1)
+    available_space = y_top - max_data_height
+
+    step = available_space / (len(stats_df) + 1)
+    base_y = max_data_height + (step * 0.3)
+
+    # 3. رسم براکت‌ها به صورت فشرده در فضای تعیین‌شده
+    for i, (_, row) in enumerate(stats_df.iterrows()):
+        diff1, diff2 = comparisons[i]
+        x1 = ["easy", "medium", "hard"].index(diff1)
+        x2 = ["easy", "medium", "hard"].index(diff2)
+
+        y = base_y + (i * step)
+        h = step * 0.15
+
+        ax.plot([x1, x1, x2, x2], [y, y + h, y + h, y], color=color, linewidth=1)
+        ax.text((x1 + x2) / 2, y + h + (step * 0.05), _format_pvalue(row["p-value"]),
+                ha="center", va="bottom", fontsize=8, color=color)
+
+    # 4. قفل کردن نهایی محورها روی اعداد شما
+    ax.set_ylim(bottom=y_bottom, top=y_top)
+
+    if custom_xlim:
+        ax.set_xlim(custom_xlim)
+
+    return stats_df
+
+def _paired_wilcoxon(df, value_col, comparisons):
+    results = []
+    pivot = df.pivot(index="Subject", columns="Difficulty", values=value_col)
+
+    for diff1, diff2 in comparisons:
+        paired = pivot[[diff1, diff2]].dropna()
+        n_pairs = len(paired)
+
+        if n_pairs == 0:
+            p_val = np.nan
+        elif np.allclose(paired[diff1].values, paired[diff2].values):
+            p_val = 1.0
+        else:
+            try:
+                _, p_val = wilcoxon(paired[diff1], paired[diff2], alternative="two-sided")
+            except ValueError:
+                p_val = np.nan
+
+        results.append({
+            "Metric": value_col,
+            "Comparison": f"{diff1.capitalize()} vs {diff2.capitalize()}",
+            "N": n_pairs,
+            "p-value": p_val
+        })
+
+    return pd.DataFrame(results)
+
+
+def _normalize_metric(df, value_col):
+    values = pd.to_numeric(df[value_col], errors="coerce")
+    std = values.std()
+    return (values - values.mean()) / std if pd.notna(std) and std != 0 else pd.Series(np.nan, index=df.index)
+
+
+def _format_pvalue(p_val):
+    if pd.isna(p_val):
+        return "p=NA"
+    elif p_val < 0.001:
+        return "p<0.001"
+    return f"p={p_val:.3f}"
 
 
 

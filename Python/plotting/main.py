@@ -12,20 +12,20 @@ def results_data():
 def results_modality():
 
     # 1. Manuscript
-    plot_timing_metrics_unpaired(perception_results_all, color_palette)
-    plot_performance_and_polar_accuracy(perception_results_all, experiment_logs_all, color_palette, axes=None)
-    plot_error_boxplots(error_distribution, color_palette)
+    # plot_timing_metrics_unpaired(perception_results_all, color_palette)
+    # plot_performance_and_polar_accuracy(perception_results_all, experiment_logs_all, color_palette, axes=None)
+    # plot_error_boxplots(error_distribution, color_palette)
 
     # plot_multiple_collision_time_windows(0.5, experiment_logs_all, perception_results_all, color_palette)
-    plot_longitudinal_performance(perception_results_all, experiment_logs_all, color_palette)
-
+    # plot_longitudinal_performance(perception_results_all, experiment_logs_all, color_palette)
+    # plot_modality_spider_chart(perception_results_all, color_palette)
     # test_wickens_with_task_shedding(perception_results_all, experiment_logs_all) # *
     #____________________________________________
     # 2. Sup Mat
-    # plot_modality_spider_chart(perception_results_all, color_palette)
-    # plot_weighted_error_means(error_results) # -
-    # test_depth_perception_limits(perception_results_all, color_palette)
-    # plot_spatial_error_landscape(perception_results_all, color_palette)
+
+    plot_weighted_error_means(error_results) # -
+    test_depth_perception_limits(perception_results_all, color_palette)
+    plot_spatial_error_landscape(perception_results_all, color_palette)
 
     # 3. Remove
     # plot_collision_vs_accuracy(perception_results_all, experiment_logs_all, color_palette)
@@ -36,8 +36,8 @@ def results_modality():
 
 def results_difficulty():
     # 1. Manuscript
-    difficulty_specific_redistribution(perception_results_all, experiment_logs_all, demographics, color_palette)
-    difficulty_modality_specific_redistribution(perception_results_all, experiment_logs_all, demographics, color_palette)
+    difficulty_specific_redistribution(perception_results_all, experiment_logs_all, demographics)
+    # difficulty_modality_specific_redistribution(perception_results_all, experiment_logs_all, demographics, color_palette)
     # plot_workload_vs_accuracy_by_difficulty(perception_results_all, experiment_logs_all, color_palette)
 
     # 2. Sup Mat
@@ -48,7 +48,7 @@ def results_difficulty():
 
 def results_modality_difficulty():
     # 1. Manuscript
-    difficulty_modality_specific_redistribution(perception_results_all, experiment_logs_all, demographics, color_palette)
+    # difficulty_modality_specific_redistribution(perception_results_all, experiment_logs_all, demographics, color_palette)
 
     # 2. Sup Mat
     # plot_modality_difficulty_performance_matrices(perception_results_all, color_palette)
@@ -57,7 +57,7 @@ def results_modality_difficulty():
 
 def results_gender():
     # 1. Manuscript
-    # df = plot_gender_differences(perception_results_all, demographics)
+    df = plot_gender_differences(perception_results_all, demographics)
     # test_gender_differences(df, metrics_to_test=None)
     plot_performance_by_gender(perception_results_all, experiment_logs_all, demographics_path, color_palette)
     pass
@@ -74,9 +74,10 @@ def results_questionnaire_modality():
     pass
 def results_others():
     # 1. Manuscript
-    get_missed_invalidated_trials_percentage(perception_results_all)
-    plot_misses_vs_errors(perception_results_all)
-    plot_unified_tradeoffs(perception_results_all, experiment_logs_all)
+    # get_missed_invalidated_trials_percentage(perception_results_all)
+    # plot_misses_vs_errors(perception_results_all)
+    # plot_unified_tradeoffs(perception_results_all, experiment_logs_all)
+    plot_combined_tradeoffs(perception_results_all, experiment_logs_all)
 
 
     # 2. Sup Mat
@@ -115,6 +116,9 @@ def questionnaire():
     # plot_questionnaire_results(df_questionnaire_final, color_code='#99DDFF')
 
     # plot_unified_performance_correlations(perception_results_all, experiment_logs_all, df_questionnaire_final, color_palette)
+
+    # plot_questionnaire_mid(df_questionnaire_mid, color_palette)
+    plot_questionnaire_final(df_questionnaire_final)
     return None
 def demographic():
     # check_folder_contents('../s1-s2-j')
@@ -146,7 +150,7 @@ if __name__ == "__main__":
 
     data_path = '../Dataset/Dataset/Recordings'
     demographics_path = '../Dataset/Dataset/Metadata/Demographics.csv'
-    participants_to_remove = ['39', '53', '24', '03'] # '39', '53', '24', '03'
+    participants_to_remove = [] # '39', '53', '24', '03'
 
     perception_results_all = get_perception_results_df(data_path, participants_to_remove)
     experiment_logs_all = get_experiment_logs_df(data_path, participants_to_remove)
@@ -167,7 +171,7 @@ if __name__ == "__main__":
     # results_gender()
     # results_questionnaire()
     # results_questionnaire_modality()
-    results_others()
+    # results_others()
 
-    # questionnaire()
+    questionnaire()
     # demographic()
